@@ -400,11 +400,11 @@ export class MainScene extends Phaser.Scene {
     const store = useGameStore.getState();
     const projectiles = this.player.getProjectiles();
     
-    projectiles.forEach((projectile) => {
-      if (!projectile.active) return;
+    for (const projectile of projectiles) {
+      if (!projectile.active) continue;
       
-      this.enemies.forEach((enemy) => {
-        if (!enemy.active) return;
+      for (const enemy of this.enemies) {
+        if (!enemy.active) continue;
         
         // Distance-based collision
         const dx = enemy.x - projectile.x;
@@ -413,10 +413,20 @@ export class MainScene extends Phaser.Scene {
         const minDist = enemy.getSize() + projectile.config.size;
         
         if (dist < minDist) {
+          // For piercing projectiles, check if we've already hit this enemy
+          if (projectile.isPiercing() && projectile.hasHitEnemy(enemy)) {
+            continue; // Skip this enemy, already hit
+          }
+          
           // Enemy takes damage
           const wasBoss = enemy.isBoss();
           const enemyType = enemy.getType();
           const destroyed = enemy.takeDamage(projectile.getDamage());
+          
+          // Mark this enemy as hit (for piercing projectiles)
+          if (projectile.isPiercing()) {
+            projectile.markEnemyHit(enemy);
+          }
           
           if (destroyed) {
             // Enemy destroyed
@@ -439,8 +449,8 @@ export class MainScene extends Phaser.Scene {
             projectile.destroy();
           }
         }
-      });
-    });
+      }
+    }
   }
 
   /**

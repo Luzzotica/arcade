@@ -15,6 +15,7 @@ export class Projectile extends Phaser.GameObjects.Arc {
   private lifetime: number;
   private damage: number;
   private piercing: boolean;
+  private hitEnemies: Set<Phaser.GameObjects.GameObject> = new Set(); // Track enemies already hit
 
   constructor(
     scene: Phaser.Scene,
@@ -77,6 +78,20 @@ export class Projectile extends Phaser.GameObjects.Arc {
 
   getPhysicsBody(): Phaser.Physics.Arcade.Body {
     return this.physicsBody;
+  }
+
+  /**
+   * Check if this projectile has already hit an enemy
+   */
+  hasHitEnemy(enemy: Phaser.GameObjects.GameObject): boolean {
+    return this.hitEnemies.has(enemy);
+  }
+
+  /**
+   * Mark an enemy as hit by this projectile
+   */
+  markEnemyHit(enemy: Phaser.GameObjects.GameObject): void {
+    this.hitEnemies.add(enemy);
   }
 
   // Mark for destruction (for piercing projectiles that can hit multiple enemies)
