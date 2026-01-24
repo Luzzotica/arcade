@@ -25,7 +25,8 @@ export class MainScene extends Phaser.Scene {
   private bossSpawned: boolean = false;
   private starGraphics!: Phaser.GameObjects.Graphics;
   
-  // Boss health bar UI
+  // Store subscription cleanup
+  private unsubscribeFromStore: (() => void) | null = null;
 
   constructor() {
     super({ key: 'MainScene' });
@@ -42,6 +43,10 @@ export class MainScene extends Phaser.Scene {
     this.cameras.main.setBounds(-10000, -10000, 20000, 20000);
     this.cameras.main.startFollow(this.player.getContainer(), true, 0.1, 0.1);
     this.cameras.main.setDeadzone(0, 0); // No deadzone - always centered on player
+    
+    // Register cleanup on scene shutdown/destroy
+    this.events.on('shutdown', this.shutdown, this);
+    this.events.on('destroy', this.shutdown, this);
     
     // Subscribe to game store
     this.initStoreSubscription();
@@ -86,8 +91,19 @@ export class MainScene extends Phaser.Scene {
   private pendingShipUpdate: Record<string, import('../../store/gameStore').HexModule> | null = null;
 
   private initStoreSubscription(): void {
-    // Listen for state changes
-    useGameStore.subscribe((state, prevState) => {
+    // Clean up any existing subscription first
+    if (this.unsubscribeFromStore) {
+      this.unsubscribeFromStore();
+      this.unsubscribeFromStore = null;
+    }
+    
+    // Listen for state changes and store the unsubscribe function
+    this.unsubscribeFromStore = useGameStore.subscribe((state, prevState) => {
+      // Safety check: make sure scene is still valid
+      if (!this.scene || !this.scene.manager) {
+        return;
+      }
+      
       // Defer ship updates to next frame to avoid Phaser crashes during update loop
       if (state.ship !== prevState.ship) {
         this.pendingShipUpdate = state.ship;
@@ -106,9 +122,9 @@ export class MainScene extends Phaser.Scene {
       const wasPaused = prevState.isPaused || prevState.isConstructionMode || prevState.showPauseMenu;
       
       if (shouldPause && !wasPaused) {
-        this.scene.pause();
+        this.scene.pause('MainScene');
       } else if (!shouldPause && wasPaused) {
-        this.scene.resume();
+        this.scene.resume('MainScene');
       }
     });
     
@@ -116,6 +132,17 @@ export class MainScene extends Phaser.Scene {
     const state = useGameStore.getState();
     if (Object.keys(state.ship).length > 0) {
       this.player.initFromStore(state.ship);
+    }
+  }
+
+  /**
+   * Clean up when scene is shut down (e.g., returning to menu)
+   */
+  shutdown(): void {
+    // Unsubscribe from store to prevent memory leaks and stale callbacks
+    if (this.unsubscribeFromStore) {
+      this.unsubscribeFromStore();
+      this.unsubscribeFromStore = null;
     }
   }
 
