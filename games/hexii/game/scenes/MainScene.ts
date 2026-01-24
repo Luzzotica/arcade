@@ -89,7 +89,7 @@ export class MainScene extends Phaser.Scene {
   private pendingShipUpdate: Record<string, import('../../store/gameStore').HexModule> | null = null;
 
   private initStoreSubscription(): void {
-    // Listen for ship changes
+    // Listen for state changes
     useGameStore.subscribe((state, prevState) => {
       // Defer ship updates to next frame to avoid Phaser crashes during update loop
       if (state.ship !== prevState.ship) {
@@ -102,6 +102,16 @@ export class MainScene extends Phaser.Scene {
             this.showNextBossHex();
           });
         }
+      }
+      
+      // Handle pause state changes using Phaser's scene pause/resume
+      const shouldPause = state.isPaused || state.isConstructionMode || state.showPauseMenu;
+      const wasPaused = prevState.isPaused || prevState.isConstructionMode || prevState.showPauseMenu;
+      
+      if (shouldPause && !wasPaused) {
+        this.scene.pause();
+      } else if (!shouldPause && wasPaused) {
+        this.scene.resume();
       }
     });
     
@@ -152,35 +162,17 @@ export class MainScene extends Phaser.Scene {
       this.pendingShipUpdate = null;
     }
     
-    const store = useGameStore.getState();
-    const isPaused = store.isPaused || store.isConstructionMode || store.showPauseMenu;
-    
-    // Always update player with pause state (so it stops moving when paused)
-    this.player.update(_time, delta, isPaused);
-    
-    // Update hex chests even when paused (for pickup)
-    this.hexChests.forEach((chest) => chest.update());
-    this.hexChests = this.hexChests.filter((c) => c.active);
-    this.checkHexChestCollisions();
-    
-    // If paused, stop all other game logic
-    if (isPaused) {
-      // Stop all enemy movement
-      this.enemies.forEach((enemy) => {
-        enemy.getBody()?.setVelocity(0, 0);
-      });
-      // Stop all exp drops
-      this.expDrops.forEach((drop) => {
-        drop.getPhysicsBody()?.setVelocity(0, 0);
-      });
-      return;
-    }
+    // Scene is paused via scene.pause() when React UIs are open
+    // so we don't need manual pause checks here
     
     // Update wave timer
     this.waveTimer += delta;
     if (this.waveTimer >= this.waveDuration) {
       this.advanceWave();
     }
+    
+    // Update player (includes shooting)
+    this.player.update(_time, delta);
     
     // Update projectiles
     const projectiles = this.player.getProjectiles();
@@ -208,10 +200,15 @@ export class MainScene extends Phaser.Scene {
     this.expDrops.forEach((drop) => drop.update());
     this.expDrops = this.expDrops.filter((d) => d.active);
     
+    // Update hex chests
+    this.hexChests.forEach((chest) => chest.update());
+    this.hexChests = this.hexChests.filter((c) => c.active);
+    
     // Check collisions
     this.checkProjectileCollisions();
     this.checkEnemyCollisions();
     this.checkExpDropCollisions();
+    this.checkHexChestCollisions();
     
     // Spawn enemies
     this.spawnTimer += delta;

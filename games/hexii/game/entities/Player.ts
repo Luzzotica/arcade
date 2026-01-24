@@ -196,14 +196,7 @@ export class Player {
   /**
    * Update player each frame
    */
-  update(time: number, delta: number, isPaused: boolean = false): void {
-    // When paused, stop all movement and don't process input
-    if (isPaused) {
-      this.body.setAcceleration(0, 0);
-      this.body.setVelocity(0, 0);
-      return;
-    }
-    
+  update(time: number, delta: number): void {
     // Handle WASD movement
     let accelX = 0;
     let accelY = 0;

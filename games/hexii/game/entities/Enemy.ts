@@ -378,11 +378,4 @@ export class Enemy extends Phaser.GameObjects.Graphics {
   getMaxHp(): number {
     return this.maxHp;
   }
-
-  /**
-   * Get physics body
-   */
-  getBody(): Phaser.Physics.Arcade.Body | null {
-    return this.physicsBody;
-  }
 }
