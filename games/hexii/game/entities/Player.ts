@@ -64,14 +64,8 @@ export class Player {
     // Set up mouse input
     this.mousePointer = scene.input.activePointer;
     
-    // Mouse click/hold for shooting
-    scene.input.on('pointerdown', () => {
-      this.isShooting = true;
-    });
-    
-    scene.input.on('pointerup', () => {
-      this.isShooting = false;
-    });
+    // Shooting is always active (no click needed)
+    this.isShooting = true;
   }
 
   /**
@@ -222,10 +216,8 @@ export class Player {
     
     this.body.setAcceleration(accelX, accelY);
     
-    // Handle shooting
-    if (this.isShooting) {
-      this.updateShooting(time, delta);
-    }
+    // Always shoot towards mouse
+    this.updateShooting(time, delta);
     
     // Update cooldowns
     this.shootCooldowns.forEach((cooldown, key) => {

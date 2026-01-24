@@ -11,4 +11,5 @@
 
 #game-container canvas {
   display: block;
+  cursor: crosshair;
 }
