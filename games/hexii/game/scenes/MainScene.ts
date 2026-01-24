@@ -456,7 +456,7 @@ export class MainScene extends Phaser.Scene {
     this.queueBossHexDrops(hexCount);
   }
 
-  private bossHexQueue: Array<import('../store/gameStore').HexModule> = [];
+  private bossHexQueue: Array<import('../../store/gameStore').HexModule> = [];
 
   /**
    * Queue hex drops from boss and start construction mode
