@@ -4,13 +4,13 @@ export type ExpDropType = 'SMALL' | 'LARGE';
 
 const EXP_DROP_CONFIG = {
   SMALL: {
-    color: 0x4dd0e1, // Light blue
+    color: 0x4dd0e1, // Light cyan/blue
     size: 6,
     value: 1,
   },
   LARGE: {
-    color: 0xff4757, // Red
-    size: 10,
+    color: 0xff4757, // Red - same size, different color
+    size: 6,
     value: 5,
   },
 };

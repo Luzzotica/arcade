@@ -50,7 +50,7 @@ const ENEMY_CONFIGS: Record<EnemyType, Omit<EnemyConfig, 'type'>> = {
     color: ENEMY_COLORS.BOSS,
     size: 48,
     speed: 30,
-    hp: 200,
+    hp: 2000,
     damage: 30,
     score: 200,
     isBoss: true,
@@ -363,5 +363,19 @@ export class Enemy extends Phaser.GameObjects.Graphics {
    */
   isBoss(): boolean {
     return this.config.isBoss === true;
+  }
+
+  /**
+   * Get current HP
+   */
+  getHp(): number {
+    return this.hp;
+  }
+
+  /**
+   * Get maximum HP
+   */
+  getMaxHp(): number {
+    return this.maxHp;
   }
 }

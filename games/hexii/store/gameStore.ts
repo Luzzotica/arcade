@@ -28,6 +28,7 @@ export interface GameState {
   pendingHex: HexModule | null;
   pendingHexChoices: HexModule[] | null; // For level up: 3 choices
   isPaused: boolean;
+  showPauseMenu: boolean; // Show pause menu overlay
   score: number;
   wave: number;
   
@@ -41,6 +42,8 @@ export interface GameState {
   heal: (amount: number) => void;
   regenShield: (amount: number) => void;
   setPaused: (paused: boolean) => void;
+  togglePauseMenu: () => void;
+  closePauseMenu: () => void;
   addScore: (points: number) => void;
   addExp: (amount: number) => void;
   levelUp: () => void;
@@ -83,6 +86,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   pendingHex: null,
   pendingHexChoices: null,
   isPaused: false,
+  showPauseMenu: false,
   score: 0,
   wave: 1,
   
@@ -191,6 +195,22 @@ export const useGameStore = create<GameState>((set, get) => ({
   // Pause/unpause
   setPaused: (paused: boolean) => set({ isPaused: paused }),
   
+  // Toggle pause menu (ESC key)
+  togglePauseMenu: () => {
+    const { showPauseMenu, isConstructionMode } = get();
+    // Don't toggle if in construction mode
+    if (isConstructionMode) return;
+    
+    const newShowPauseMenu = !showPauseMenu;
+    set({
+      showPauseMenu: newShowPauseMenu,
+      isPaused: newShowPauseMenu,
+    });
+  },
+  
+  // Close pause menu (resume game)
+  closePauseMenu: () => set({ showPauseMenu: false, isPaused: false }),
+  
   // Add score
   addScore: (points: number) => set({ score: get().score + points }),
   
@@ -248,6 +268,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     pendingHex: null,
     pendingHexChoices: null,
     isPaused: false,
+    showPauseMenu: false,
     score: 0,
     wave: 1,
   }),
