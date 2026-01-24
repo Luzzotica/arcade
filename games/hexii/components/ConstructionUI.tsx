@@ -44,19 +44,23 @@ function Hexagon({ x, y, color, size, isCore, isSlot, isSelected, onClick }: Hex
     return pts.join(' ');
   }, [size]);
 
+  const computedFill = isSlot ? 'rgba(255, 255, 255, 0.1)' : color;
+  const computedOpacity = isSlot ? 0.6 : 0.85;
+
   return (
     <g 
       transform={`translate(${x}, ${y})`}
       onClick={onClick}
       style={{ cursor: onClick ? 'pointer' : 'default' }}
-      className={`hex ${isSlot ? 'hex-slot' : ''} ${isSelected ? 'hex-selected' : ''}`}
+      className={`hex ${isSlot ? 'hex-slot' : ''}`}
     >
       <polygon
         points={points}
-        fill={isSlot ? 'rgba(255, 255, 255, 0.1)' : color}
+        fill={computedFill}
         stroke={isSelected ? '#fff' : 'rgba(255, 255, 255, 0.5)'}
         strokeWidth={isSelected ? 3 : 1.5}
-        opacity={isSlot ? 0.6 : 0.85}
+        opacity={computedOpacity}
+        className={isSelected ? 'hex-selected' : ''}
       />
       {isCore && (
         <>

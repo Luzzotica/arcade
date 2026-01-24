@@ -85,8 +85,12 @@
 }
 
 @keyframes pulse {
-  0%, 100% { filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.5)); }
-  50% { filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.8)); }
+  0%, 100% { 
+    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.5));
+  }
+  50% { 
+    filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.8));
+  }
 }
 
 .new-hex-info {

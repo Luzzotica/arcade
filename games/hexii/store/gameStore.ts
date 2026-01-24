@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { RingOfPerfectionType } from '../game/utils/SynergyCalculator';
 import { BASE_HEX_STATS } from '../game/config/SynergyConfig';
+import type { BossShape } from '../game/data/BossDialogues';
 
 export type HexColor = 'RED' | 'GREEN' | 'YELLOW' | 'BLUE' | 'CYAN' | 'ORANGE';
 export type HexType = 'CORE' | 'MODULE';
@@ -43,6 +44,14 @@ export interface GameState {
   // Boss state
   bossHp: number | null;
   bossMaxHp: number | null;
+  bossNumber: number; // 1-5, cycles after 5
+  bossesDefeated: number; // Total bosses killed (for scaling)
+  showBossDialogue: boolean;
+  bossDialoguePhase: 'pan_to_boss' | 'boss_talking' | 'pan_to_player' | 'player_talking' | null;
+  currentBossType: BossShape | null;
+  bossPosition: { x: number; y: number } | null; // For camera panning
+  showWinScreen: boolean;
+  hasWon: boolean; // True after first septagon defeat
   
   // Actions
   initializeShip: (coreColor: HexColor) => void;
@@ -63,6 +72,10 @@ export interface GameState {
   setBossHealth: (hp: number | null, maxHp: number | null) => void;
   setDead: (dead: boolean) => void;
   setWaveAnnouncement: (show: boolean) => void;
+  setBossDialogue: (show: boolean, bossType?: BossShape, bossPos?: { x: number; y: number }) => void;
+  setBossDialoguePhase: (phase: 'pan_to_boss' | 'boss_talking' | 'pan_to_player' | 'player_talking' | null) => void;
+  defeatBoss: (bossType?: string) => void;
+  setWinScreen: (show: boolean) => void;
   reset: () => void;
 }
 
@@ -138,6 +151,14 @@ export const useGameStore = create<GameState>((set, get) => ({
   wave: 1,
   bossHp: null,
   bossMaxHp: null,
+  bossNumber: 1,
+  bossesDefeated: 0,
+  showBossDialogue: false,
+  bossDialoguePhase: null,
+  currentBossType: null,
+  bossPosition: null,
+  showWinScreen: false,
+  hasWon: false,
   
   // Initialize ship with core
   initializeShip: (coreColor: HexColor) => {
@@ -162,6 +183,14 @@ export const useGameStore = create<GameState>((set, get) => ({
       level: 1,
       exp: 0,
       expToNextLevel: calculateExpToNextLevel(1),
+      bossNumber: 1,
+      bossesDefeated: 0,
+      showBossDialogue: false,
+      bossDialoguePhase: null,
+      currentBossType: null,
+      bossPosition: null,
+      showWinScreen: false,
+      hasWon: false,
     });
   },
   
@@ -330,6 +359,55 @@ export const useGameStore = create<GameState>((set, get) => ({
   // Set wave announcement visibility
   setWaveAnnouncement: (show: boolean) => set({ showWaveAnnouncement: show }),
   
+  // Set boss dialogue visibility
+  setBossDialogue: (show: boolean, bossType?: BossShape, bossPos?: { x: number; y: number }) => {
+    set({
+      showBossDialogue: show,
+      bossDialoguePhase: show ? 'pan_to_boss' : null,
+      currentBossType: bossType || null,
+      bossPosition: bossPos || null,
+      isPaused: show,
+    });
+  },
+  
+  // Set boss dialogue phase
+  setBossDialoguePhase: (phase: 'pan_to_boss' | 'boss_talking' | 'pan_to_player' | 'player_talking' | null) => {
+    set({ bossDialoguePhase: phase });
+    if (phase === null) {
+      set({ showBossDialogue: false, isPaused: false });
+    }
+  },
+  
+  // Called when a boss is defeated
+  defeatBoss: (bossType?: string) => {
+    const { bossNumber, hasWon } = get();
+    const newBossesDefeated = get().bossesDefeated + 1;
+    
+    // Check if this is the final boss (septagon, boss #5)
+    // Require both bossNumber === 5 AND bossType === 'BOSS_SEPTAGON' for extra safety
+    const isFinalBoss = bossType === 'BOSS_SEPTAGON';
+    const shouldShowWin = isFinalBoss && !hasWon;
+    
+    // Cycle boss number (1-5)
+    const newBossNumber = (bossNumber % 5) + 1;
+    
+    set({
+      bossesDefeated: newBossesDefeated,
+      bossNumber: newBossNumber,
+      bossHp: null,
+      bossMaxHp: null,
+      showWinScreen: shouldShowWin,
+      hasWon: shouldShowWin ? true : hasWon,
+      isPaused: shouldShowWin,
+    });
+  },
+  
+  // Set win screen visibility
+  setWinScreen: (show: boolean) => set({ 
+    showWinScreen: show, 
+    isPaused: show,
+  }),
+  
   // Reset game
   reset: () => set({
     ship: {},
@@ -356,5 +434,13 @@ export const useGameStore = create<GameState>((set, get) => ({
     wave: 1,
     bossHp: null,
     bossMaxHp: null,
+    bossNumber: 1,
+    bossesDefeated: 0,
+    showBossDialogue: false,
+    bossDialoguePhase: null,
+    currentBossType: null,
+    bossPosition: null,
+    showWinScreen: false,
+    hasWon: false,
   }),
 }));

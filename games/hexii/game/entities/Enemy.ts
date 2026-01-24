@@ -1,12 +1,27 @@
 import * as Phaser from 'phaser';
 
-export type EnemyType = 'TRIANGLE' | 'SQUARE' | 'PENTAGON' | 'BOSS';
+export type EnemyType = 'TRIANGLE' | 'SQUARE' | 'PENTAGON' | 'BOSS_CIRCLE' | 'BOSS_TRIANGLE' | 'BOSS_SQUARE' | 'BOSS_PENTAGON' | 'BOSS_SEPTAGON';
+
+// Boss type helpers
+export type BossEnemyType = 'BOSS_CIRCLE' | 'BOSS_TRIANGLE' | 'BOSS_SQUARE' | 'BOSS_PENTAGON' | 'BOSS_SEPTAGON';
+
+const BOSS_TYPES: BossEnemyType[] = ['BOSS_CIRCLE', 'BOSS_TRIANGLE', 'BOSS_SQUARE', 'BOSS_PENTAGON', 'BOSS_SEPTAGON'];
+
+// Get boss enemy type from boss number (1-5, cycles)
+export function getBossTypeFromNumber(bossNumber: number): BossEnemyType {
+  const index = ((bossNumber - 1) % 5);
+  return BOSS_TYPES[index];
+}
 
 const ENEMY_COLORS = {
   TRIANGLE: 0xff6b6b,
   SQUARE: 0x4ecdc4,
   PENTAGON: 0xa55eea,
-  BOSS: 0xff0000,
+  BOSS_CIRCLE: 0xff0000,
+  BOSS_TRIANGLE: 0xff4400,
+  BOSS_SQUARE: 0xff8800,
+  BOSS_PENTAGON: 0xcc00ff,
+  BOSS_SEPTAGON: 0xff0044,
 };
 
 interface EnemyConfig {
@@ -45,13 +60,54 @@ const ENEMY_CONFIGS: Record<EnemyType, Omit<EnemyConfig, 'type'>> = {
     damage: 15,
     score: 50,
   },
-  BOSS: {
-    color: ENEMY_COLORS.BOSS,
+  // Boss 1: Circle - fast but lower HP
+  BOSS_CIRCLE: {
+    color: ENEMY_COLORS.BOSS_CIRCLE,
+    size: 40,
+    speed: 45,
+    hp: 3000,
+    damage: 25,
+    score: 200,
+    isBoss: true,
+  },
+  // Boss 2: Triangle - aggressive, medium stats
+  BOSS_TRIANGLE: {
+    color: ENEMY_COLORS.BOSS_TRIANGLE,
+    size: 44,
+    speed: 40,
+    hp: 4500,
+    damage: 30,
+    score: 300,
+    isBoss: true,
+  },
+  // Boss 3: Square - tanky, slow
+  BOSS_SQUARE: {
+    color: ENEMY_COLORS.BOSS_SQUARE,
     size: 48,
     speed: 30,
-    hp: 2000,
-    damage: 30,
-    score: 200,
+    hp: 6000,
+    damage: 35,
+    score: 400,
+    isBoss: true,
+  },
+  // Boss 4: Pentagon - balanced but strong
+  BOSS_PENTAGON: {
+    color: ENEMY_COLORS.BOSS_PENTAGON,
+    size: 52,
+    speed: 35,
+    hp: 7500,
+    damage: 40,
+    score: 500,
+    isBoss: true,
+  },
+  // Boss 5: Septagon - final boss, maximum stats
+  BOSS_SEPTAGON: {
+    color: ENEMY_COLORS.BOSS_SEPTAGON,
+    size: 56,
+    speed: 32,
+    hp: 10500,
+    damage: 50,
+    score: 1000,
     isBoss: true,
   },
 };
@@ -75,13 +131,16 @@ export class Enemy extends Phaser.GameObjects.Graphics {
   private isCorrosion: boolean = false; // Takes +30% damage
   private entropyStacks: number = 0; // Permanent defense reduction
 
-  constructor(scene: Phaser.Scene, x: number, y: number, type: EnemyType, hpMultiplier: number = 1, damageMultiplier: number = 1) {
+  private onDeathCallback?: (enemy: Enemy) => void;
+
+  constructor(scene: Phaser.Scene, x: number, y: number, type: EnemyType, hpMultiplier: number = 1, damageMultiplier: number = 1, onDeath?: (enemy: Enemy) => void) {
     super(scene);
     
     this.config = { type, ...ENEMY_CONFIGS[type] };
     this.config.damage = Math.floor(this.config.damage * damageMultiplier);
     this.maxHp = Math.floor(this.config.hp * hpMultiplier);
     this.hp = this.maxHp;
+    this.onDeathCallback = onDeath;
     
     this.setPosition(x, y);
     this.drawShape();
@@ -123,7 +182,11 @@ export class Enemy extends Phaser.GameObjects.Graphics {
       case 'TRIANGLE': this.drawTriangle(size); break;
       case 'SQUARE': this.drawSquare(size); break;
       case 'PENTAGON': this.drawPentagon(size); break;
-      case 'BOSS': this.drawBoss(size); break;
+      case 'BOSS_CIRCLE': this.drawBossCircle(size); break;
+      case 'BOSS_TRIANGLE': this.drawBossTriangle(size); break;
+      case 'BOSS_SQUARE': this.drawBossSquare(size); break;
+      case 'BOSS_PENTAGON': this.drawBossPentagon(size); break;
+      case 'BOSS_SEPTAGON': this.drawBossSeptagon(size); break;
     }
     
     this.closePath();
@@ -161,8 +224,90 @@ export class Enemy extends Phaser.GameObjects.Graphics {
     }
   }
 
-  private drawBoss(size: number): void {
-    // Draw septagon (7-sided polygon)
+  // ============================================================================
+  // BOSS DRAW METHODS
+  // ============================================================================
+
+  private drawBossCircle(size: number): void {
+    // Draw circle boss
+    this.arc(0, 0, size, 0, Math.PI * 2);
+    
+    this.closePath();
+    this.fillPath();
+    this.strokePath();
+    
+    // Inner eye
+    this.fillStyle(0x000000, 0.8);
+    this.fillCircle(0, 0, size * 0.5);
+    this.fillStyle(this.config.color, 1);
+    this.fillCircle(0, 0, size * 0.25);
+  }
+
+  private drawBossTriangle(size: number): void {
+    // Draw triangle boss
+    for (let i = 0; i < 3; i++) {
+      const angle = (Math.PI * 2 / 3) * i - Math.PI / 2;
+      const x = size * Math.cos(angle);
+      const y = size * Math.sin(angle);
+      if (i === 0) this.moveTo(x, y);
+      else this.lineTo(x, y);
+    }
+    
+    this.closePath();
+    this.fillPath();
+    this.strokePath();
+    
+    // Inner decoration
+    this.fillStyle(0x000000, 0.8);
+    this.fillCircle(0, 0, size * 0.4);
+    this.fillStyle(this.config.color, 1);
+    this.fillCircle(0, 0, size * 0.2);
+  }
+
+  private drawBossSquare(size: number): void {
+    // Draw square boss
+    for (let i = 0; i < 4; i++) {
+      const angle = (Math.PI * 2 / 4) * i - Math.PI / 4;
+      const x = size * Math.cos(angle);
+      const y = size * Math.sin(angle);
+      if (i === 0) this.moveTo(x, y);
+      else this.lineTo(x, y);
+    }
+    
+    this.closePath();
+    this.fillPath();
+    this.strokePath();
+    
+    // Inner decoration
+    this.fillStyle(0x000000, 0.8);
+    this.fillCircle(0, 0, size * 0.4);
+    this.fillStyle(this.config.color, 1);
+    this.fillCircle(0, 0, size * 0.2);
+  }
+
+  private drawBossPentagon(size: number): void {
+    // Draw pentagon boss
+    for (let i = 0; i < 5; i++) {
+      const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
+      const x = size * Math.cos(angle);
+      const y = size * Math.sin(angle);
+      if (i === 0) this.moveTo(x, y);
+      else this.lineTo(x, y);
+    }
+    
+    this.closePath();
+    this.fillPath();
+    this.strokePath();
+    
+    // Inner decoration
+    this.fillStyle(0x000000, 0.8);
+    this.fillCircle(0, 0, size * 0.4);
+    this.fillStyle(this.config.color, 1);
+    this.fillCircle(0, 0, size * 0.2);
+  }
+
+  private drawBossSeptagon(size: number): void {
+    // Draw septagon (7-sided polygon) - final boss
     for (let i = 0; i < 7; i++) {
       const angle = (Math.PI * 2 / 7) * i - Math.PI / 2;
       const x = size * Math.cos(angle);
@@ -175,10 +320,13 @@ export class Enemy extends Phaser.GameObjects.Graphics {
     this.fillPath();
     this.strokePath();
     
+    // Inner decoration - more elaborate for final boss
     this.fillStyle(0x000000, 0.8);
-    this.fillCircle(0, 0, size * 0.4);
-    this.fillStyle(0xff0000, 1);
-    this.fillCircle(0, 0, size * 0.2);
+    this.fillCircle(0, 0, size * 0.45);
+    this.fillStyle(this.config.color, 1);
+    this.fillCircle(0, 0, size * 0.25);
+    this.fillStyle(0x000000, 0.9);
+    this.fillCircle(0, 0, size * 0.12);
   }
 
   setTarget(x: number, y: number): void {
@@ -310,6 +458,12 @@ export class Enemy extends Phaser.GameObjects.Graphics {
 
   private die(): void {
     this.createDeathParticles();
+    
+    // Notify callback before destroying
+    if (this.onDeathCallback) {
+      this.onDeathCallback(this);
+    }
+    
     this.destroy();
   }
 

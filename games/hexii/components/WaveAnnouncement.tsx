@@ -22,7 +22,7 @@ export function WaveAnnouncement() {
   return (
     <div className="wave-announcement">
       <div className="wave-announcement-text">
-        WAVE {wave + 1}
+        WAVE {wave}
       </div>
     </div>
   );

@@ -195,6 +195,14 @@ export class Player {
   }
 
   /**
+   * Stop all player movement (freeze in place)
+   */
+  stopMovement(): void {
+    this.body.setVelocity(0, 0);
+    this.body.setAcceleration(0, 0);
+  }
+
+  /**
    * Calculate movement speed multiplier from YELLOW synergies
    */
   private calculateMovementSpeedMultiplier(): number {

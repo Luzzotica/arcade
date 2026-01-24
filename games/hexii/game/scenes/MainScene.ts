@@ -1,13 +1,14 @@
 import * as Phaser from 'phaser';
 import { Player } from '../entities/Player';
-import { Enemy } from '../entities/Enemy';
+import { Enemy, getBossTypeFromNumber } from '../entities/Enemy';
 import type { EnemyType } from '../entities/Enemy';
 import { ExpDrop } from '../entities/ExpDrop';
 import { HexChest } from '../entities/HexChest';
 import { useGameStore } from '../../store/gameStore';
-import { COLORS, PLAYER_SPEED } from '../config';
+import { COLORS, PLAYER_SPEED, TEST_MODE } from '../config';
 import { synergyCalculator, type SynergyStats } from '../utils/SynergyCalculator';
 import { SYNERGY_VALUES } from '../config/SynergyConfig';
+import { getBossShapeFromNumber } from '../data/BossDialogues';
 
 export class MainScene extends Phaser.Scene {
   private player!: Player;
@@ -31,6 +32,9 @@ export class MainScene extends Phaser.Scene {
   // Field visuals
   private blueFieldGraphics: Phaser.GameObjects.Graphics | null = null;
   private corrosionFieldGraphics: Phaser.GameObjects.Graphics | null = null;
+  
+  // Frozen state for boss dialogue
+  private frozenVelocities: Map<Phaser.Physics.Arcade.Body, { vx: number; vy: number }> = new Map();
   
   // Regen timers
   private hpRegenTimer: number = 0;
@@ -101,6 +105,13 @@ export class MainScene extends Phaser.Scene {
     
     this.spawnInitialExpDrops();
     this.gameStarted = true;
+    
+    // Test mode: press 'B' to spawn next boss
+    if (TEST_MODE) {
+      this.input.keyboard?.on('keydown-B', () => {
+        this.spawnBoss();
+      });
+    }
   }
   
   private spawnInitialExpDrops(): void {
@@ -138,12 +149,14 @@ export class MainScene extends Phaser.Scene {
         }
       }
       
-      const shouldPause = state.isPaused || state.isConstructionMode || state.showPauseMenu;
-      const wasPaused = prevState.isPaused || prevState.isConstructionMode || prevState.showPauseMenu;
+      // Don't pause scene during boss dialogue camera pans - we need camera to update
+      const bossDialoguePanning = state.bossDialoguePhase === 'pan_to_boss' || state.bossDialoguePhase === 'pan_to_player';
+      const shouldPauseScene = (state.isPaused && !bossDialoguePanning) || state.isConstructionMode || state.showPauseMenu;
+      const wasPausedScene = (prevState.isPaused && prevState.bossDialoguePhase !== 'pan_to_boss' && prevState.bossDialoguePhase !== 'pan_to_player') || prevState.isConstructionMode || prevState.showPauseMenu;
       
-      if (shouldPause && !wasPaused) {
+      if (shouldPauseScene && !wasPausedScene) {
         this.scene.pause('MainScene');
-      } else if (!shouldPause && wasPaused) {
+      } else if (!shouldPauseScene && wasPausedScene) {
         this.scene.resume('MainScene');
       }
     });
@@ -198,12 +211,18 @@ export class MainScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     if (!this.gameStarted) return;
     
+    const store = useGameStore.getState();
+    
+    // During boss dialogue, skip game logic but allow camera pans to continue
+    if (store.showBossDialogue) {
+      return;
+    }
+    
     if (this.pendingShipUpdate) {
       this.player.initFromStore(this.pendingShipUpdate);
       this.pendingShipUpdate = null;
     }
     
-    const store = useGameStore.getState();
     const stats = this.getStats();
     
     // Update timers
@@ -463,7 +482,12 @@ export class MainScene extends Phaser.Scene {
     this.enemiesPerSpawn = Math.min(1 + Math.floor((currentWave - 1) / 2), 5);
     this.spawnInterval = Math.max(1500 - (currentWave - 1) * 100, 500);
     
-    if (currentWave > 1 && currentWave % 3 === 0) {
+    // In test mode, spawn boss every wave; otherwise every 3 waves
+    const shouldSpawnBoss = TEST_MODE 
+      ? currentWave > 0 
+      : (currentWave > 1 && currentWave % 3 === 0);
+    
+    if (shouldSpawnBoss) {
       this.time.delayedCall(1000, () => this.spawnBoss());
     }
     
@@ -527,13 +551,31 @@ export class MainScene extends Phaser.Scene {
     else if (roll < 0.85) type = 'SQUARE';
     else type = 'PENTAGON';
     
-    const enemy = new Enemy(this, x, y, type, this.enemyHpMultiplier, this.enemyDamageMultiplier);
+    const enemy = new Enemy(this, x, y, type, this.enemyHpMultiplier, this.enemyDamageMultiplier, (e) => this.handleEnemyDeath(e));
     this.enemies.push(enemy);
   }
 
   private spawnBoss(): void {
     if (this.bossSpawned) return;
     this.bossSpawned = true;
+    
+    const store = useGameStore.getState();
+    const bossNumber = store.bossNumber;
+    const bossesDefeated = store.bossesDefeated;
+    
+    // Get boss type based on current boss number (1-5)
+    const bossType = getBossTypeFromNumber(bossNumber);
+    const bossShape = getBossShapeFromNumber(bossNumber);
+    
+    // Additional scaling based on bosses defeated (for post-win cycles)
+    const cycleBonus = Math.floor(bossesDefeated / 5) * 0.5; // +50% per complete cycle
+    let totalHpMultiplier = this.enemyHpMultiplier * (1 + cycleBonus);
+    const totalDamageMultiplier = this.enemyDamageMultiplier * (1 + cycleBonus);
+    
+    // In test mode, reduce boss HP to 1/10
+    if (TEST_MODE) {
+      totalHpMultiplier *= 0.1;
+    }
     
     const camera = this.cameras.main;
     const playerPos = this.player.getPosition();
@@ -542,26 +584,150 @@ export class MainScene extends Phaser.Scene {
     const x = playerPos.x + Math.cos(angle) * distance;
     const y = playerPos.y + Math.sin(angle) * distance;
     
-    const boss = new Enemy(this, x, y, 'BOSS', this.enemyHpMultiplier, this.enemyDamageMultiplier);
+    const boss = new Enemy(this, x, y, bossType, totalHpMultiplier, totalDamageMultiplier, (e) => this.handleEnemyDeath(e));
     this.enemies.push(boss);
     
-    const bossText = this.add.text(
-      this.cameras.main.width / 2,
-      this.cameras.main.height / 2,
-      'BOSS INCOMING!',
-      { fontSize: '48px', color: '#ff0000', fontFamily: 'Arial Black' }
-    ).setOrigin(0.5).setScrollFactor(0).setDepth(500);
+    // Freeze all entities during boss dialogue
+    this.freezeAllEntities();
     
-    this.tweens.add({
-      targets: bossText,
-      alpha: 0,
-      scale: 1.5,
-      duration: 1500,
-      ease: 'Power2',
-      onComplete: () => bossText.destroy(),
+    // Trigger boss dialogue with position for camera panning
+    store.setBossDialogue(true, bossShape, { x, y });
+    
+    // Start camera pan to boss
+    this.panCameraToBoss(x, y);
+  }
+  
+  /**
+   * Pan camera to boss position
+   */
+  private panCameraToBoss(x: number, y: number): void {
+    const store = useGameStore.getState();
+    const camera = this.cameras.main;
+    
+    // Stop following player temporarily
+    camera.stopFollow();
+    
+    // Pan to boss
+    camera.pan(x, y, 1000, 'Sine.easeInOut', true, (_cam, progress) => {
+      if (progress === 1) {
+        // Camera arrived at boss, update phase
+        store.setBossDialoguePhase('boss_talking');
+      }
     });
     
     this.cameras.main.shake(300, 0.01);
+  }
+  
+  /**
+   * Pan camera back to player
+   */
+  public panCameraToPlayer(): void {
+    const store = useGameStore.getState();
+    const camera = this.cameras.main;
+    const playerPos = this.player.getPosition();
+    
+    // Pan back to player
+    camera.pan(playerPos.x, playerPos.y, 1000, 'Sine.easeInOut', true, (_cam, progress) => {
+      if (progress === 1) {
+        // Camera arrived at player, update phase and resume following
+        camera.startFollow(this.player.getContainer(), true, 0.1, 0.1);
+        store.setBossDialoguePhase('player_talking');
+      }
+    });
+  }
+  
+  /**
+   * Called when player dismisses dialogue and engages boss
+   */
+  public engageBoss(): void {
+    const camera = this.cameras.main;
+    
+    // Ensure camera is following player
+    camera.startFollow(this.player.getContainer(), true, 0.1, 0.1);
+    
+    // Unfreeze all entities
+    this.unfreezeAllEntities();
+  }
+  
+  /**
+   * Freeze all entities (player, enemies, exp drops) during boss dialogue
+   */
+  private freezeAllEntities(): void {
+    this.frozenVelocities.clear();
+    
+    // Freeze player
+    const playerBody = this.player.getBody();
+    this.frozenVelocities.set(playerBody, { vx: playerBody.velocity.x, vy: playerBody.velocity.y });
+    this.player.stopMovement();
+    
+    // Freeze all enemies
+    for (const enemy of this.enemies) {
+      if (!enemy.active) continue;
+      const body = enemy.getBody();
+      if (body) {
+        this.frozenVelocities.set(body, { vx: body.velocity.x, vy: body.velocity.y });
+        body.setVelocity(0, 0);
+      }
+    }
+    
+    // Freeze all exp drops
+    for (const drop of this.expDrops) {
+      if (!drop.active) continue;
+      const body = drop.getPhysicsBody();
+      if (body) {
+        this.frozenVelocities.set(body, { vx: body.velocity.x, vy: body.velocity.y });
+        body.setVelocity(0, 0);
+      }
+    }
+    
+    // Freeze all hex chests
+    for (const chest of this.hexChests) {
+      if (!chest.active) continue;
+      const body = (chest as any).physicsBody;
+      if (body) {
+        this.frozenVelocities.set(body, { vx: body.velocity.x, vy: body.velocity.y });
+        body.setVelocity(0, 0);
+      }
+    }
+  }
+  
+  /**
+   * Unfreeze all entities after boss dialogue ends
+   */
+  private unfreezeAllEntities(): void {
+    // Restore all stored velocities
+    for (const [body, vel] of this.frozenVelocities) {
+      if (body && body.gameObject?.active) {
+        body.setVelocity(vel.vx, vel.vy);
+      }
+    }
+    this.frozenVelocities.clear();
+  }
+
+  /**
+   * Centralized handler for enemy death - handles drops, scoring, and effects
+   */
+  private handleEnemyDeath(enemy: Enemy): void {
+    const store = useGameStore.getState();
+    const stats = this.getStats();
+    
+    // Add score
+    store.addScore(enemy.getScore());
+    
+    // ADRENALINE: Instant heal on kill
+    if (stats.synergies.adrenaline) {
+      store.heal(SYNERGY_VALUES.ADRENALINE.healAmount);
+    }
+    
+    // Handle drops based on enemy type
+    if (enemy.isBoss()) {
+      this.dropHexChestFromBoss(enemy.x, enemy.y, enemy.getType());
+    } else {
+      const enemyType = enemy.getType();
+      const dropType = (enemyType === 'PENTAGON' || enemyType === 'SQUARE') ? 'LARGE' : 'SMALL';
+      const drop = new ExpDrop(this, enemy.x, enemy.y, dropType);
+      this.expDrops.push(drop);
+    }
   }
 
   private checkProjectileCollisions(): void {
@@ -583,8 +749,6 @@ export class MainScene extends Phaser.Scene {
         if (dist < minDist) {
           if (projectile.isPiercing() && projectile.hasHitEnemy(enemy)) continue;
           
-          const wasBoss = enemy.isBoss();
-          const enemyType = enemy.getType();
           const destroyed = enemy.takeDamage(projectile.getDamage());
           
           // HEAVY_IMPACT: Knockback (bosses are immune to physics)
@@ -602,22 +766,7 @@ export class MainScene extends Phaser.Scene {
           
           if (projectile.isPiercing()) projectile.markEnemyHit(enemy);
           
-          if (destroyed) {
-            store.addScore(enemy.getScore());
-            
-            // ADRENALINE: Instant heal on kill
-            if (stats.synergies.adrenaline) {
-              store.heal(SYNERGY_VALUES.ADRENALINE.healAmount);
-            }
-            
-            if (wasBoss) {
-              this.dropHexChestFromBoss(enemy.x, enemy.y);
-            } else {
-              const dropType = (enemyType === 'PENTAGON' || enemyType === 'SQUARE') ? 'LARGE' : 'SMALL';
-              const drop = new ExpDrop(this, enemy.x, enemy.y, dropType);
-              this.expDrops.push(drop);
-            }
-          }
+          // Enemy death is handled by the callback in handleEnemyDeath()
           
           if (!projectile.isPiercing()) projectile.destroy();
         }
@@ -625,7 +774,12 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
-  private dropHexChestFromBoss(x: number, y: number): void {
+  private dropHexChestFromBoss(x: number, y: number, bossType?: string): void {
+    const store = useGameStore.getState();
+    
+    // Handle boss defeat (increments counters, may trigger win screen)
+    store.defeatBoss(bossType);
+    
     const roll = Math.random();
     let hexCount = 1;
     if (roll < 0.01) hexCount = 5;
@@ -844,44 +998,25 @@ export class MainScene extends Phaser.Scene {
       }
       
       if (collided) {
-        let enemyDestroyed = false;
-        let wasBoss = false;
-        let enemyType: EnemyType | null = null;
-        
         // RAMMING_SPEED: Damage enemy at max speed (ONLY if YELLOW + ORANGE synergy)
         if (stats.synergies.rammingSpeed && playerSpeed > PLAYER_SPEED * SYNERGY_VALUES.RAMMING_SPEED.speedThreshold) {
-          enemyDestroyed = enemy.takeDamage(SYNERGY_VALUES.RAMMING_SPEED.collisionDamage);
-          if (enemyDestroyed) {
-            wasBoss = enemy.isBoss();
-            enemyType = enemy.getType();
-          }
-        }
-        
-        // ENTROPY: Permanent defense reduction on attacker
-        if (stats.synergies.entropy && !enemyDestroyed) {
-          enemy.applyEntropy();
-        }
-        
-        // Handle enemy death from collision damage
-        if (enemyDestroyed) {
-          store.addScore(enemy.getScore());
+          const enemyDestroyed = enemy.takeDamage(SYNERGY_VALUES.RAMMING_SPEED.collisionDamage);
           
-          // ADRENALINE: Instant heal on kill
-          if (stats.synergies.adrenaline) {
-            store.heal(SYNERGY_VALUES.ADRENALINE.healAmount);
+          // ENTROPY: Permanent defense reduction on attacker
+          if (!enemyDestroyed && stats.synergies.entropy) {
+            enemy.applyEntropy();
           }
           
-          // Drop XP or chest
-          if (wasBoss) {
-            this.dropHexChestFromBoss(enemy.x, enemy.y);
-          } else if (enemyType) {
-            const dropType = (enemyType === 'PENTAGON' || enemyType === 'SQUARE') ? 'LARGE' : 'SMALL';
-            const drop = new ExpDrop(this, enemy.x, enemy.y, dropType);
-            this.expDrops.push(drop);
-          }
-          
+          // Enemy death is handled by the callback in handleEnemyDeath()
           // Skip rest of collision handling for destroyed enemy
-          continue;
+          if (enemyDestroyed) {
+            continue;
+          }
+        } else {
+          // ENTROPY: Permanent defense reduction on attacker (even without ramming speed)
+          if (stats.synergies.entropy) {
+            enemy.applyEntropy();
+          }
         }
         
         if (enemy.canDealDamage()) {
@@ -906,7 +1041,9 @@ export class MainScene extends Phaser.Scene {
             this.fireReactivePlating(closestHexX, closestHexY);
           }
           
-          if (store.hp <= 0 && !this.isDead) {
+          // Get fresh HP value after damage was applied
+          const currentHp = useGameStore.getState().hp;
+          if (currentHp <= 0 && !this.isDead) {
             this.playerDeath();
           }
         }

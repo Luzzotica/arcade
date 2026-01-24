@@ -43,3 +43,6 @@ export const HEX_SIZE = 12; // Outer radius of hexagon (doubled from 6)
 export const PLAYER_SPEED = 200;
 export const PLAYER_ACCELERATION = 800;
 export const PLAYER_DRAG = 400;
+
+// Test mode: bosses spawn every wave with 1/10 health
+export const TEST_MODE = true;

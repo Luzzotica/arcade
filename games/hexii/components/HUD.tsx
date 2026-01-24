@@ -53,7 +53,7 @@ export function HUD() {
           </div>
           <div className="wave">
             <span className="wave-label">WAVE</span>
-            <span className="wave-value">{wave + 1}</span>
+            <span className="wave-value">{wave}</span>
           </div>
         </div>
       </div>
