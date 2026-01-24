@@ -26,9 +26,6 @@ export class MainScene extends Phaser.Scene {
   private starGraphics!: Phaser.GameObjects.Graphics;
   
   // Boss health bar UI
-  private bossHealthBarBg?: Phaser.GameObjects.Graphics;
-  private bossHealthBarFill?: Phaser.GameObjects.Graphics;
-  private bossHealthText?: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: 'MainScene' });
@@ -229,11 +226,6 @@ export class MainScene extends Phaser.Scene {
     this.waveTimer = 0;
     this.bossSpawned = false;
     
-    // Clean up boss health bar if it exists
-    if (this.bossHealthBarBg) {
-      this.destroyBossHealthBar();
-    }
-    
     // Increase difficulty each wave
     this.enemyHpMultiplier = 1 + (currentWave - 1) * 0.25; // +25% HP per wave
     this.enemiesPerSpawn = Math.min(1 + Math.floor((currentWave - 1) / 2), 5); // +1 enemy every 2 waves, max 5
@@ -376,9 +368,6 @@ export class MainScene extends Phaser.Scene {
     const boss = new Enemy(this, x, y, 'BOSS', this.enemyHpMultiplier);
     this.enemies.push(boss);
     
-    // Create boss health bar
-    this.createBossHealthBar();
-    
     // Boss announcement
     const bossText = this.add.text(
       this.cameras.main.width / 2,
@@ -435,7 +424,6 @@ export class MainScene extends Phaser.Scene {
             
             // Boss drops a chest with hexagon module(s)
             if (wasBoss) {
-              this.destroyBossHealthBar();
               this.dropHexChestFromBoss(enemy.x, enemy.y);
             } else {
               // Regular enemies spawn exp drop
@@ -799,105 +787,24 @@ export class MainScene extends Phaser.Scene {
   }
 
   /**
-   * Create boss health bar UI
-   */
-  private createBossHealthBar(): void {
-    const camera = this.cameras.main;
-    const barWidth = 400;
-    const barHeight = 30;
-    const barX = camera.width / 2;
-    const barY = 50;
-    
-    // Background bar
-    this.bossHealthBarBg = this.add.graphics();
-    this.bossHealthBarBg.fillStyle(0x000000, 0.7);
-    this.bossHealthBarBg.fillRoundedRect(
-      barX - barWidth / 2,
-      barY - barHeight / 2,
-      barWidth,
-      barHeight,
-      5
-    );
-    this.bossHealthBarBg.setScrollFactor(0).setDepth(1000);
-    
-    // Fill bar (will be updated)
-    this.bossHealthBarFill = this.add.graphics();
-    this.bossHealthBarFill.setScrollFactor(0).setDepth(1001);
-    
-    // Health text
-    this.bossHealthText = this.add.text(
-      barX,
-      barY,
-      'BOSS HP: 100%',
-      {
-        fontSize: '20px',
-        color: '#ffffff',
-        fontFamily: 'Arial Black',
-      }
-    ).setOrigin(0.5).setScrollFactor(0).setDepth(1002);
-  }
-
-  /**
-   * Update boss health bar
+   * Update boss health bar (updates store for React component)
    */
   private updateBossHealthBar(): void {
+    const store = useGameStore.getState();
+    
     // Find active boss
     const boss = this.enemies.find((e) => e.active && e.isBoss());
     
     if (!boss) {
       // No boss active, hide health bar
-      if (this.bossHealthBarBg) {
-        this.destroyBossHealthBar();
-      }
+      store.setBossHealth(null, null);
       return;
     }
     
-    // Update health bar if it exists
-    if (this.bossHealthBarBg && this.bossHealthBarFill && this.bossHealthText) {
-      const hp = boss.getHp();
-      const maxHp = boss.getMaxHp();
-      const healthPercent = Math.max(0, hp / maxHp);
-      
-      const camera = this.cameras.main;
-      const barWidth = 400;
-      const barHeight = 30;
-      const barX = camera.width / 2;
-      const barY = 50;
-      const fillWidth = barWidth * healthPercent;
-      
-      // Update fill bar
-      this.bossHealthBarFill.clear();
-      const fillColor = healthPercent > 0.5 ? 0xff0000 : healthPercent > 0.25 ? 0xff8800 : 0xff0000;
-      this.bossHealthBarFill.fillStyle(fillColor, 1);
-      this.bossHealthBarFill.fillRoundedRect(
-        barX - barWidth / 2,
-        barY - barHeight / 2,
-        fillWidth,
-        barHeight,
-        5
-      );
-      
-      // Update text
-      this.bossHealthText.setText(`BOSS HP: ${Math.ceil(hp)}/${maxHp} (${Math.ceil(healthPercent * 100)}%)`);
-    }
-  }
-
-  /**
-   * Destroy boss health bar UI
-   */
-  private destroyBossHealthBar(): void {
-    if (this.bossHealthBarBg) {
-      this.bossHealthBarBg.destroy();
-      this.bossHealthBarBg = undefined;
-    }
-    if (this.bossHealthBarFill) {
-      this.bossHealthBarFill.destroy();
-      this.bossHealthBarFill = undefined;
-    }
-    if (this.bossHealthText) {
-      this.bossHealthText.destroy();
-      this.bossHealthText = undefined;
-    }
+    // Update store with boss health
+    const hp = boss.getHp();
+    const maxHp = boss.getMaxHp();
+    store.setBossHealth(hp, maxHp);
   }
 
   /**

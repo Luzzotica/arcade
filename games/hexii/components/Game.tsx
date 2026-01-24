@@ -4,6 +4,7 @@ import { GAME_CONFIG } from '../game/config';
 import { ConstructionUI } from './ConstructionUI';
 import { HUD } from './HUD';
 import { PauseMenu } from './PauseMenu';
+import { BossHealthBar } from './BossHealthBar';
 import { useGameStore } from '../store/gameStore';
 import styles from './Game.module.css';
 
@@ -68,6 +69,7 @@ export function Game({ onReturnToMenu }: GameProps) {
     <div className={styles.gameWrapper}>
       <div ref={containerRef} id="game-container" />
       <HUD />
+      <BossHealthBar />
       {isConstructionMode && <ConstructionUI />}
       {showPauseMenu && <PauseMenu onQuit={onReturnToMenu} />}
     </div>

@@ -32,6 +32,10 @@ export interface GameState {
   score: number;
   wave: number;
   
+  // Boss state
+  bossHp: number | null;
+  bossMaxHp: number | null;
+  
   // Actions
   initializeShip: (coreColor: HexColor) => void;
   attachHex: (key: string, hex: HexModule) => void;
@@ -48,6 +52,7 @@ export interface GameState {
   addExp: (amount: number) => void;
   levelUp: () => void;
   nextWave: () => void;
+  setBossHealth: (hp: number | null, maxHp: number | null) => void;
   reset: () => void;
 }
 
@@ -89,6 +94,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   showPauseMenu: false,
   score: 0,
   wave: 1,
+  bossHp: null,
+  bossMaxHp: null,
   
   // Initialize ship with core
   initializeShip: (coreColor: HexColor) => {
@@ -253,6 +260,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   // Next wave
   nextWave: () => set({ wave: get().wave + 1 }),
   
+  // Set boss health (null to hide)
+  setBossHealth: (hp: number | null, maxHp: number | null) => set({ bossHp: hp, bossMaxHp: maxHp }),
+  
   // Reset game
   reset: () => set({
     ship: {},
@@ -271,5 +281,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     showPauseMenu: false,
     score: 0,
     wave: 1,
+    bossHp: null,
+    bossMaxHp: null,
   }),
 }));
