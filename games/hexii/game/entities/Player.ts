@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { HexGrid } from '../utils/HexGrid';
 import type { HexCoord } from '../utils/HexGrid';
 import { COLORS, HEX_SIZE, PLAYER_SPEED, PLAYER_ACCELERATION, PLAYER_DRAG } from '../config';

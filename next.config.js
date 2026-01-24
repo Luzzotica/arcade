@@ -11,6 +11,10 @@ const nextConfig = {
     };
     return config;
   },
+  // Disable static optimization for arcade routes that use Phaser
+  experimental: {
+    missingSuspenseWithCSRBailout: false,
+  },
 };
 
 module.exports = nextConfig;

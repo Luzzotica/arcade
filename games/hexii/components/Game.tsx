@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { GAME_CONFIG } from '../game/config';
 import { ConstructionUI } from './ConstructionUI';
 import { HUD } from './HUD';

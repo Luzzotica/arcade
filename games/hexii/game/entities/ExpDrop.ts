@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 
 export class ExpDrop extends Phaser.GameObjects.Graphics {
   private physicsBody!: Phaser.Physics.Arcade.Body;
