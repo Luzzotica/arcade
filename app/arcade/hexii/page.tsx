@@ -8,10 +8,13 @@ import type { HexColor } from '@/games/hexii/store/gameStore';
 import styles from './page.module.css';
 
 // Dynamically import Game component to prevent SSR issues with Phaser
-const Game = dynamic(() => import('@/games/hexii/components/Game').then(mod => ({ default: mod.Game })), {
-  ssr: false,
-  loading: () => <div className={styles.app}>Loading game...</div>
-});
+const Game = dynamic(
+  () => import('@/games/hexii/components/Game').then((mod) => ({ default: mod.Game })),
+  {
+    ssr: false,
+    loading: () => <div className={styles.app}>Loading game...</div>,
+  }
+);
 
 function MainMenu({ onStart }: { onStart: (color: HexColor) => void }) {
   const [selectedColor, setSelectedColor] = useState<HexColor>('RED');
