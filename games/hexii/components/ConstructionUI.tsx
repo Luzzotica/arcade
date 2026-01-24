@@ -12,6 +12,7 @@ const COLOR_VALUES: Record<HexColor, string> = {
   GREEN: '#2ed573',
   YELLOW: '#ffa502',
   BLUE: '#3742fa',
+  CYAN: '#00d9ff',
 };
 
 const COLOR_DESCRIPTIONS: Record<HexColor, { stat: string; ability: string }> = {
@@ -19,6 +20,7 @@ const COLOR_DESCRIPTIONS: Record<HexColor, { stat: string; ability: string }> = 
   GREEN: { stat: '+10 Max HP', ability: 'Healer: HP regen, buffs bullet size' },
   YELLOW: { stat: '+5% Move Speed', ability: 'Thruster: Acceleration, buffs fire rate' },
   BLUE: { stat: '+10 Max Shield', ability: 'Barrier: Shield regen, buffs penetration' },
+  CYAN: { stat: '+50 Pickup Radius', ability: 'Magnet: Increases XP pickup range' },
 };
 
 interface HexagonProps {
@@ -84,10 +86,15 @@ function Hexagon({ x, y, color, size, isCore, isSlot, isSelected, onClick }: Hex
 export function ConstructionUI() {
   const ship = useGameStore((state) => state.ship);
   const pendingHex = useGameStore((state) => state.pendingHex);
+  const pendingHexChoices = useGameStore((state) => state.pendingHexChoices);
   const attachHex = useGameStore((state) => state.attachHex);
   const setConstructionMode = useGameStore((state) => state.setConstructionMode);
+  const selectHexChoice = useGameStore((state) => state.selectHexChoice);
   
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  
+  // If we have choices, show the choice selection UI
+  const showChoices = pendingHexChoices && pendingHexChoices.length > 0 && !pendingHex;
 
   // Calculate valid attachment points
   const validSlots = useMemo(() => {
@@ -155,6 +162,39 @@ export function ConstructionUI() {
     color: 'GREEN',
     health: 100,
   };
+
+  // Show hex choice selection screen
+  if (showChoices) {
+    return (
+      <div className="construction-overlay">
+        <div className="construction-panel">
+          <h2 className="construction-title">LEVEL UP!</h2>
+          <p className="construction-subtitle">Choose your new module</p>
+          
+          <div className="hex-choices">
+            {pendingHexChoices.map((hex, index) => (
+              <button
+                key={index}
+                className="hex-choice-btn"
+                onClick={() => selectHexChoice(index)}
+                style={{ borderColor: COLOR_VALUES[hex.color] }}
+              >
+                <div 
+                  className="hex-choice-icon"
+                  style={{ color: COLOR_VALUES[hex.color] }}
+                >
+                  ⬢
+                </div>
+                <div className="hex-choice-name">{hex.color}</div>
+                <div className="hex-choice-stat">{COLOR_DESCRIPTIONS[hex.color].stat}</div>
+                <div className="hex-choice-ability">{COLOR_DESCRIPTIONS[hex.color].ability}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="construction-overlay">

@@ -1,13 +1,35 @@
 import * as Phaser from 'phaser';
 
+export type ExpDropType = 'SMALL' | 'LARGE';
+
+const EXP_DROP_CONFIG = {
+  SMALL: {
+    color: 0x4dd0e1, // Light blue
+    size: 6,
+    value: 1,
+  },
+  LARGE: {
+    color: 0xff4757, // Red
+    size: 10,
+    value: 5,
+  },
+};
+
 export class ExpDrop extends Phaser.GameObjects.Graphics {
   private physicsBody!: Phaser.Physics.Arcade.Body;
-  private pickupRadius: number = 8;
+  private pickupRadius: number;
   private pulseTween!: Phaser.Tweens.Tween;
   private rotationSpeed: number = 0.02;
+  private dropType: ExpDropType;
+  private expValue: number;
 
-  constructor(scene: Phaser.Scene, x: number, y: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number, type: ExpDropType = 'SMALL') {
     super(scene);
+    
+    this.dropType = type;
+    const config = EXP_DROP_CONFIG[type];
+    this.pickupRadius = config.size + 2;
+    this.expValue = config.value;
     
     this.setPosition(x, y);
     this.drawHexagon();
@@ -34,8 +56,9 @@ export class ExpDrop extends Phaser.GameObjects.Graphics {
   private drawHexagon(): void {
     this.clear();
     
-    const size = 6;
-    const color = 0x4dd0e1; // Light blue
+    const config = EXP_DROP_CONFIG[this.dropType];
+    const size = config.size;
+    const color = config.color;
     
     // Draw fill
     this.fillStyle(color, 0.9);
@@ -75,6 +98,10 @@ export class ExpDrop extends Phaser.GameObjects.Graphics {
 
   getPickupRadius(): number {
     return this.pickupRadius;
+  }
+
+  getExpValue(): number {
+    return this.expValue;
   }
 
   destroy(): void {

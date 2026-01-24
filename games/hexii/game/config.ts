@@ -30,6 +30,7 @@ export const COLORS = {
   GREEN: 0x2ed573,
   YELLOW: 0xffa502,
   BLUE: 0x3742fa,
+  CYAN: 0x00d9ff,
   WHITE: 0xffffff,
   ENEMY_TRIANGLE: 0xff6b6b,
   ENEMY_SQUARE: 0x4ecdc4,

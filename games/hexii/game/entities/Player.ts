@@ -480,4 +480,23 @@ export class Player {
     // Screen shake
     this.scene.cameras.main.shake(100, 0.01);
   }
+
+  /**
+   * Get all hex world positions for per-hexagon collision detection
+   */
+  getHexWorldPositions(): Array<{ x: number; y: number; size: number }> {
+    const positions: Array<{ x: number; y: number; size: number }> = [];
+    
+    this.shipData.forEach((_, key) => {
+      const coord = HexGrid.fromKey(key);
+      const pixel = this.hexGrid.axialToPixel(coord);
+      positions.push({
+        x: this.container.x + pixel.x,
+        y: this.container.y + pixel.y,
+        size: HEX_SIZE,
+      });
+    });
+    
+    return positions;
+  }
 }

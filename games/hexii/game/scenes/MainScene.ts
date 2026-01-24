@@ -122,6 +122,14 @@ export class MainScene extends Phaser.Scene {
       // Defer ship updates to next frame to avoid Phaser crashes during update loop
       if (state.ship !== prevState.ship) {
         this.pendingShipUpdate = state.ship;
+        
+        // If construction mode just closed and we have more boss hexes queued
+        if (!state.isConstructionMode && prevState.isConstructionMode && this.bossHexQueue.length > 0) {
+          // Delay to let the UI update
+          this.time.delayedCall(100, () => {
+            this.showNextBossHex();
+          });
+        }
       }
       
       // Update pause text visibility (safe operation)
@@ -425,18 +433,21 @@ export class MainScene extends Phaser.Scene {
         if (dist < minDist) {
           // Enemy takes damage
           const wasBoss = enemy.isBoss();
+          const enemyType = enemy.getType();
           const destroyed = enemy.takeDamage(projectile.getDamage());
           
           if (destroyed) {
             // Enemy destroyed
             store.addScore(enemy.getScore());
             
-            // Boss drops a hexagon module
+            // Boss drops a hexagon module(s)
             if (wasBoss) {
               this.dropHexFromBoss();
             } else {
               // Regular enemies spawn exp drop
-              const drop = new ExpDrop(this, enemy.x, enemy.y);
+              // Stronger enemies (PENTAGON, SQUARE) drop larger XP
+              const dropType = (enemyType === 'PENTAGON' || enemyType === 'SQUARE') ? 'LARGE' : 'SMALL';
+              const drop = new ExpDrop(this, enemy.x, enemy.y, dropType);
               this.expDrops.push(drop);
             }
           }
@@ -451,19 +462,77 @@ export class MainScene extends Phaser.Scene {
   }
 
   /**
-   * Drop a hexagon module when boss is killed
+   * Drop hexagon module(s) when boss is killed
+   * 1% chance for 5 hexes, 5% chance for 3 hexes, 94% chance for 1 hex
    */
   private dropHexFromBoss(): void {
-    const store = useGameStore.getState();
-    const colors: Array<'RED' | 'GREEN' | 'YELLOW' | 'BLUE'> = ['RED', 'GREEN', 'YELLOW', 'BLUE'];
-    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+    const roll = Math.random();
+    let hexCount = 1;
     
-    // Enter construction mode with the dropped hex
-    store.setConstructionMode(true, {
-      type: 'MODULE',
-      color: randomColor,
-      health: 100,
-    });
+    if (roll < 0.01) {
+      hexCount = 5; // 1% chance
+    } else if (roll < 0.06) {
+      hexCount = 3; // 5% chance (0.01 to 0.06)
+    }
+    
+    // Queue up all the hexes to be attached
+    this.queueBossHexDrops(hexCount);
+  }
+
+  private bossHexQueue: Array<import('../store/gameStore').HexModule> = [];
+
+  /**
+   * Queue hex drops from boss and start construction mode
+   */
+  private queueBossHexDrops(count: number): void {
+    const colors: Array<'RED' | 'GREEN' | 'YELLOW' | 'BLUE' | 'CYAN'> = ['RED', 'GREEN', 'YELLOW', 'BLUE', 'CYAN'];
+    
+    // Generate random hexes
+    this.bossHexQueue = [];
+    for (let i = 0; i < count; i++) {
+      const randomColor = colors[Math.floor(Math.random() * colors.length)];
+      this.bossHexQueue.push({
+        type: 'MODULE',
+        color: randomColor,
+        health: 100,
+      });
+    }
+    
+    // Start with first hex
+    this.showNextBossHex();
+  }
+
+  /**
+   * Show the next hex from boss queue
+   */
+  private showNextBossHex(): void {
+    if (this.bossHexQueue.length === 0) return;
+    
+    const nextHex = this.bossHexQueue.shift()!;
+    const store = useGameStore.getState();
+    
+    // Show announcement if multiple hexes
+    if (this.bossHexQueue.length > 0) {
+      const remainingText = this.add.text(
+        this.cameras.main.width / 2,
+        100,
+        `${this.bossHexQueue.length + 1} HEXES REMAINING!`,
+        {
+          fontSize: '24px',
+          color: '#ffa502',
+          fontFamily: 'Arial Black',
+        }
+      ).setOrigin(0.5).setScrollFactor(0).setDepth(500);
+      
+      this.tweens.add({
+        targets: remainingText,
+        alpha: 0,
+        duration: 2000,
+        onComplete: () => remainingText.destroy(),
+      });
+    }
+    
+    store.setConstructionMode(true, nextHex);
   }
   
   /**
@@ -473,7 +542,8 @@ export class MainScene extends Phaser.Scene {
     const store = useGameStore.getState();
     const playerPos = this.player.getPosition();
     const playerRadius = this.player.getBody().halfWidth;
-    const magnetRadius = 150; // Distance at which drops start being attracted
+    // Base magnet radius + bonus from CYAN hexes
+    const magnetRadius = 150 + store.pickupRadiusBonus;
     
     this.expDrops.forEach((drop) => {
       if (!drop.active) return;
@@ -491,8 +561,8 @@ export class MainScene extends Phaser.Scene {
         const vy = -(dy / dist) * magnetStrength;
         drop.getPhysicsBody().setVelocity(vx, vy);
       } else if (dist <= pickupDist) {
-        // Pick up exp drop
-        store.addExp(1); // Each drop gives 1 exp
+        // Pick up exp drop - use the drop's exp value
+        store.addExp(drop.getExpValue());
         drop.destroy();
       } else {
         // Stop movement if outside magnet range
@@ -502,23 +572,35 @@ export class MainScene extends Phaser.Scene {
   }
   
   /**
-   * Check collisions between enemies and player
+   * Check collisions between enemies and player hexagons
    */
   private checkEnemyCollisions(): void {
     const store = useGameStore.getState();
-    const playerPos = this.player.getPosition();
-    const playerRadius = this.player.getBody().halfWidth;
+    const hexPositions = this.player.getHexWorldPositions();
     
     this.enemies.forEach((enemy) => {
       if (!enemy.active) return;
       
-      // Simple distance-based collision
-      const dx = enemy.x - playerPos.x;
-      const dy = enemy.y - playerPos.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const minDist = playerRadius + enemy.getSize();
+      // Check collision against each player hex
+      let collided = false;
+      let closestHexX = 0;
+      let closestHexY = 0;
       
-      if (dist < minDist) {
+      for (const hex of hexPositions) {
+        const dx = enemy.x - hex.x;
+        const dy = enemy.y - hex.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const minDist = hex.size + enemy.getSize();
+        
+        if (dist < minDist) {
+          collided = true;
+          closestHexX = hex.x;
+          closestHexY = hex.y;
+          break;
+        }
+      }
+      
+      if (collided) {
         // Only deal damage if enemy is not on cooldown
         if (enemy.canDealDamage()) {
           // Player takes damage
@@ -534,8 +616,8 @@ export class MainScene extends Phaser.Scene {
           }
         }
         
-        // Knockback enemy away from player (they don't die)
-        enemy.knockback(playerPos.x, playerPos.y, 400);
+        // Knockback enemy away from the hex they hit
+        enemy.knockback(closestHexX, closestHexY, 400);
       }
     });
   }

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type HexColor = 'RED' | 'GREEN' | 'YELLOW' | 'BLUE';
+export type HexColor = 'RED' | 'GREEN' | 'YELLOW' | 'BLUE' | 'CYAN';
 export type HexType = 'CORE' | 'MODULE';
 
 export interface HexModule {
@@ -21,10 +21,12 @@ export interface GameState {
   level: number;
   exp: number;
   expToNextLevel: number;
+  pickupRadiusBonus: number; // Extra pickup radius from CYAN hexes
   
   // Game state
   isConstructionMode: boolean;
   pendingHex: HexModule | null;
+  pendingHexChoices: HexModule[] | null; // For level up: 3 choices
   isPaused: boolean;
   score: number;
   wave: number;
@@ -33,6 +35,8 @@ export interface GameState {
   initializeShip: (coreColor: HexColor) => void;
   attachHex: (key: string, hex: HexModule) => void;
   setConstructionMode: (isOpen: boolean, hex?: HexModule) => void;
+  setConstructionModeWithChoices: (choices: HexModule[]) => void;
+  selectHexChoice: (index: number) => void;
   takeDamage: (amount: number) => void;
   heal: (amount: number) => void;
   regenShield: (amount: number) => void;
@@ -48,13 +52,15 @@ export interface GameState {
 const calculateStats = (ship: Record<string, HexModule>) => {
   let maxHp = 100; // Base HP
   let maxShield = 0;
+  let pickupRadiusBonus = 0;
   
   Object.values(ship).forEach((hex) => {
     if (hex.color === 'GREEN') maxHp += 10;
     if (hex.color === 'BLUE') maxShield += 10;
+    if (hex.color === 'CYAN') pickupRadiusBonus += 50; // +50 pickup radius per cyan hex
   });
   
-  return { maxHp, maxShield };
+  return { maxHp, maxShield, pickupRadiusBonus };
 };
 
 // Calculate exp needed for next level
@@ -72,8 +78,10 @@ export const useGameStore = create<GameState>((set, get) => ({
   level: 1,
   exp: 0,
   expToNextLevel: 10,
+  pickupRadiusBonus: 0,
   isConstructionMode: false,
   pendingHex: null,
+  pendingHexChoices: null,
   isPaused: false,
   score: 0,
   wave: 1,
@@ -83,7 +91,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const ship: Record<string, HexModule> = {
       '0,0': { type: 'CORE', color: coreColor, health: 100 },
     };
-    const { maxHp, maxShield } = calculateStats(ship);
+    const { maxHp, maxShield, pickupRadiusBonus } = calculateStats(ship);
     
     set({
       ship,
@@ -91,6 +99,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       maxHp,
       shield: maxShield,
       maxShield,
+      pickupRadiusBonus,
       score: 0,
       wave: 1,
       level: 1,
@@ -102,7 +111,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   // Attach a new hex to the ship
   attachHex: (key: string, hex: HexModule) => {
     const newShip = { ...get().ship, [key]: hex };
-    const { maxHp, maxShield } = calculateStats(newShip);
+    const { maxHp, maxShield, pickupRadiusBonus } = calculateStats(newShip);
     
     // Heal for the HP difference when adding GREEN
     const hpDiff = maxHp - get().maxHp;
@@ -111,21 +120,45 @@ export const useGameStore = create<GameState>((set, get) => ({
       ship: newShip,
       maxHp,
       maxShield,
+      pickupRadiusBonus,
       hp: Math.min(get().hp + hpDiff, maxHp),
       shield: Math.min(get().shield, maxShield),
       isConstructionMode: false,
       pendingHex: null,
+      pendingHexChoices: null,
       isPaused: false, // Explicitly unpause when attaching hex
     });
   },
   
-  // Enter/exit construction mode
+  // Enter/exit construction mode (for boss drops - single hex, no choice)
   setConstructionMode: (isOpen: boolean, hex?: HexModule) => {
     set({
       isConstructionMode: isOpen,
       pendingHex: hex || null,
+      pendingHexChoices: null,
       isPaused: isOpen,
     });
+  },
+  
+  // Enter construction mode with choices (for level up)
+  setConstructionModeWithChoices: (choices: HexModule[]) => {
+    set({
+      isConstructionMode: true,
+      pendingHex: null,
+      pendingHexChoices: choices,
+      isPaused: true,
+    });
+  },
+  
+  // Select a hex from the choices
+  selectHexChoice: (index: number) => {
+    const choices = get().pendingHexChoices;
+    if (choices && choices[index]) {
+      set({
+        pendingHex: choices[index],
+        pendingHexChoices: null,
+      });
+    }
   },
   
   // Take damage (shield first, then HP)
@@ -182,18 +215,19 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
   
-  // Level up - randomly select a hex color and enter construction mode
+  // Level up - generate 3 random hex choices for player to pick from
   levelUp: () => {
-    const colors: HexColor[] = ['RED', 'GREEN', 'YELLOW', 'BLUE'];
-    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+    const colors: HexColor[] = ['RED', 'GREEN', 'YELLOW', 'BLUE', 'CYAN'];
     
-    const newHex: HexModule = {
-      type: 'MODULE',
-      color: randomColor,
+    // Generate 3 unique random colors
+    const shuffled = [...colors].sort(() => Math.random() - 0.5);
+    const choices: HexModule[] = shuffled.slice(0, 3).map((color) => ({
+      type: 'MODULE' as HexType,
+      color,
       health: 100,
-    };
+    }));
     
-    get().setConstructionMode(true, newHex);
+    get().setConstructionModeWithChoices(choices);
   },
   
   // Next wave
@@ -209,8 +243,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     level: 1,
     exp: 0,
     expToNextLevel: calculateExpToNextLevel(1),
+    pickupRadiusBonus: 0,
     isConstructionMode: false,
     pendingHex: null,
+    pendingHexChoices: null,
     isPaused: false,
     score: 0,
     wave: 1,
