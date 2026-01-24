@@ -3,6 +3,7 @@ import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
 import type { EnemyType } from '../entities/Enemy';
 import { ExpDrop } from '../entities/ExpDrop';
+import { HexChest } from '../entities/HexChest';
 import { useGameStore } from '../../store/gameStore';
 import { COLORS } from '../config';
 
@@ -10,6 +11,7 @@ export class MainScene extends Phaser.Scene {
   private player!: Player;
   private enemies: Enemy[] = [];
   private expDrops: ExpDrop[] = [];
+  private hexChests: HexChest[] = [];
   private spawnTimer: number = 0;
   private spawnInterval: number = 1500; // ms between spawns
   private gameStarted: boolean = false;
@@ -151,16 +153,34 @@ export class MainScene extends Phaser.Scene {
     }
     
     const store = useGameStore.getState();
-    if (store.isPaused) return;
+    const isPaused = store.isPaused || store.isConstructionMode || store.showPauseMenu;
+    
+    // Always update player with pause state (so it stops moving when paused)
+    this.player.update(_time, delta, isPaused);
+    
+    // Update hex chests even when paused (for pickup)
+    this.hexChests.forEach((chest) => chest.update());
+    this.hexChests = this.hexChests.filter((c) => c.active);
+    this.checkHexChestCollisions();
+    
+    // If paused, stop all other game logic
+    if (isPaused) {
+      // Stop all enemy movement
+      this.enemies.forEach((enemy) => {
+        enemy.getBody()?.setVelocity(0, 0);
+      });
+      // Stop all exp drops
+      this.expDrops.forEach((drop) => {
+        drop.getPhysicsBody()?.setVelocity(0, 0);
+      });
+      return;
+    }
     
     // Update wave timer
     this.waveTimer += delta;
     if (this.waveTimer >= this.waveDuration) {
       this.advanceWave();
     }
-    
-    // Update player (includes shooting)
-    this.player.update(_time, delta);
     
     // Update projectiles
     const projectiles = this.player.getProjectiles();
@@ -416,10 +436,10 @@ export class MainScene extends Phaser.Scene {
             // Enemy destroyed
             store.addScore(enemy.getScore());
             
-            // Boss drops a hexagon module(s)
+            // Boss drops a chest with hexagon module(s)
             if (wasBoss) {
               this.destroyBossHealthBar();
-              this.dropHexFromBoss();
+              this.dropHexChestFromBoss(enemy.x, enemy.y);
             } else {
               // Regular enemies spawn exp drop
               // Stronger enemies (PENTAGON, SQUARE) drop larger XP
@@ -439,10 +459,10 @@ export class MainScene extends Phaser.Scene {
   }
 
   /**
-   * Drop hexagon module(s) when boss is killed
+   * Drop a hex chest when boss is killed
    * 1% chance for 5 hexes, 5% chance for 3 hexes, 94% chance for 1 hex
    */
-  private dropHexFromBoss(): void {
+  private dropHexChestFromBoss(x: number, y: number): void {
     const roll = Math.random();
     let hexCount = 1;
     
@@ -452,31 +472,70 @@ export class MainScene extends Phaser.Scene {
       hexCount = 3; // 5% chance (0.01 to 0.06)
     }
     
-    // Queue up all the hexes to be attached
-    this.queueBossHexDrops(hexCount);
-  }
-
-  private bossHexQueue: Array<import('../../store/gameStore').HexModule> = [];
-
-  /**
-   * Queue hex drops from boss and start construction mode
-   */
-  private queueBossHexDrops(count: number): void {
+    // Generate random hexes for the chest
     const colors: Array<'RED' | 'GREEN' | 'YELLOW' | 'BLUE' | 'CYAN'> = ['RED', 'GREEN', 'YELLOW', 'BLUE', 'CYAN'];
+    const hexes: Array<import('../../store/gameStore').HexModule> = [];
     
-    // Generate random hexes
-    this.bossHexQueue = [];
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < hexCount; i++) {
       const randomColor = colors[Math.floor(Math.random() * colors.length)];
-      this.bossHexQueue.push({
+      hexes.push({
         type: 'MODULE',
         color: randomColor,
         health: 100,
       });
     }
     
-    // Start with first hex
-    this.showNextBossHex();
+    // Create the chest at the boss's death location
+    const chest = new HexChest(this, x, y, hexes);
+    this.hexChests.push(chest);
+    
+    // Announcement
+    const chestText = this.add.text(
+      this.cameras.main.width / 2,
+      100,
+      hexCount > 1 ? `CHEST DROPPED! (${hexCount} HEXES)` : 'CHEST DROPPED!',
+      {
+        fontSize: '28px',
+        color: hexCount >= 5 ? '#ffd700' : hexCount >= 3 ? '#ff00ff' : '#00ffff',
+        fontFamily: 'Arial Black',
+      }
+    ).setOrigin(0.5).setScrollFactor(0).setDepth(500);
+    
+    this.tweens.add({
+      targets: chestText,
+      alpha: 0,
+      y: 80,
+      duration: 2000,
+      onComplete: () => chestText.destroy(),
+    });
+  }
+
+  private bossHexQueue: Array<import('../../store/gameStore').HexModule> = [];
+
+  /**
+   * Check collisions between hex chests and player
+   */
+  private checkHexChestCollisions(): void {
+    const playerPos = this.player.getPosition();
+    const playerRadius = this.player.getBody().halfWidth;
+    
+    this.hexChests.forEach((chest) => {
+      if (!chest.active) return;
+      
+      const dx = chest.x - playerPos.x;
+      const dy = chest.y - playerPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const pickupDist = playerRadius + chest.getPickupRadius();
+      
+      if (dist <= pickupDist) {
+        // Pick up the chest - queue all hexes for placement
+        this.bossHexQueue = [...chest.getHexes()];
+        chest.destroy();
+        
+        // Start placing the first hex
+        this.showNextBossHex();
+      }
+    });
   }
 
   /**
