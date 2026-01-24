@@ -2,7 +2,6 @@ import * as Phaser from 'phaser';
 
 export type EnemyType = 'TRIANGLE' | 'SQUARE' | 'PENTAGON' | 'BOSS';
 
-// Enemy colors defined locally to avoid circular dependency
 const ENEMY_COLORS = {
   TRIANGLE: 0xff6b6b,
   SQUARE: 0x4ecdc4,
@@ -66,11 +65,21 @@ export class Enemy extends Phaser.GameObjects.Graphics {
   private targetY: number = 0;
   private knockbackTimer: number = 0;
   private hitCooldown: number = 0;
+  
+  // Status effects
+  private slowPercent: number = 0;
+  private slowTimer: number = 0;
+  private stunTimer: number = 0;
+  private isStunned: boolean = false;
+  private hasBeenStunned: boolean = false; // Prevent re-stun in same field
+  private isCorrosion: boolean = false; // Takes +30% damage
+  private entropyStacks: number = 0; // Permanent defense reduction
 
-  constructor(scene: Phaser.Scene, x: number, y: number, type: EnemyType, hpMultiplier: number = 1) {
+  constructor(scene: Phaser.Scene, x: number, y: number, type: EnemyType, hpMultiplier: number = 1, damageMultiplier: number = 1) {
     super(scene);
     
     this.config = { type, ...ENEMY_CONFIGS[type] };
+    this.config.damage = Math.floor(this.config.damage * damageMultiplier);
     this.maxHp = Math.floor(this.config.hp * hpMultiplier);
     this.hp = this.maxHp;
     
@@ -83,39 +92,38 @@ export class Enemy extends Phaser.GameObjects.Graphics {
     this.physicsBody = this.body as Phaser.Physics.Arcade.Body;
     this.physicsBody.setCircle(this.config.size);
     this.physicsBody.setOffset(-this.config.size, -this.config.size);
-    
-    // Enable collision with other enemies
     this.physicsBody.setBounce(0.5);
     this.physicsBody.setMass(this.config.isBoss ? 10 : 1);
   }
 
-  /**
-   * Draw the enemy shape based on type
-   */
   private drawShape(): void {
     this.clear();
     
     const { color, size } = this.config;
     
-    // Fill
-    this.fillStyle(color, 0.9);
+    // Apply visual effects for status
+    let displayColor = color;
+    if (this.isCorrosion) {
+      displayColor = 0x88ff88; // Green tint for corrosion
+    }
+    if (this.entropyStacks > 0) {
+      displayColor = Phaser.Display.Color.GetColor(
+        Math.min(255, ((displayColor >> 16) & 0xff) + this.entropyStacks * 20),
+        ((displayColor >> 8) & 0xff),
+        (displayColor & 0xff)
+      );
+    }
+    
+    this.fillStyle(displayColor, this.isStunned ? 0.5 : 0.9);
     this.lineStyle(2, 0xffffff, 0.5);
     
     this.beginPath();
     
     switch (this.config.type) {
-      case 'TRIANGLE':
-        this.drawTriangle(size);
-        break;
-      case 'SQUARE':
-        this.drawSquare(size);
-        break;
-      case 'PENTAGON':
-        this.drawPentagon(size);
-        break;
-      case 'BOSS':
-        this.drawBoss(size);
-        break;
+      case 'TRIANGLE': this.drawTriangle(size); break;
+      case 'SQUARE': this.drawSquare(size); break;
+      case 'PENTAGON': this.drawPentagon(size); break;
+      case 'BOSS': this.drawBoss(size); break;
     }
     
     this.closePath();
@@ -128,12 +136,8 @@ export class Enemy extends Phaser.GameObjects.Graphics {
       const angle = (Math.PI * 2 / 3) * i - Math.PI / 2;
       const x = size * Math.cos(angle);
       const y = size * Math.sin(angle);
-      
-      if (i === 0) {
-        this.moveTo(x, y);
-      } else {
-        this.lineTo(x, y);
-      }
+      if (i === 0) this.moveTo(x, y);
+      else this.lineTo(x, y);
     }
   }
 
@@ -142,12 +146,8 @@ export class Enemy extends Phaser.GameObjects.Graphics {
       const angle = (Math.PI * 2 / 4) * i - Math.PI / 4;
       const x = size * Math.cos(angle);
       const y = size * Math.sin(angle);
-      
-      if (i === 0) {
-        this.moveTo(x, y);
-      } else {
-        this.lineTo(x, y);
-      }
+      if (i === 0) this.moveTo(x, y);
+      else this.lineTo(x, y);
     }
   }
 
@@ -156,86 +156,107 @@ export class Enemy extends Phaser.GameObjects.Graphics {
       const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
       const x = size * Math.cos(angle);
       const y = size * Math.sin(angle);
-      
-      if (i === 0) {
-        this.moveTo(x, y);
-      } else {
-        this.lineTo(x, y);
-      }
+      if (i === 0) this.moveTo(x, y);
+      else this.lineTo(x, y);
     }
   }
 
   private drawBoss(size: number): void {
-    // Draw a hexagon for boss (bigger, menacing)
-    for (let i = 0; i < 6; i++) {
-      const angle = (Math.PI * 2 / 6) * i - Math.PI / 2;
+    // Draw septagon (7-sided polygon)
+    for (let i = 0; i < 7; i++) {
+      const angle = (Math.PI * 2 / 7) * i - Math.PI / 2;
       const x = size * Math.cos(angle);
       const y = size * Math.sin(angle);
-      
-      if (i === 0) {
-        this.moveTo(x, y);
-      } else {
-        this.lineTo(x, y);
-      }
+      if (i === 0) this.moveTo(x, y);
+      else this.lineTo(x, y);
     }
     
-    // Draw inner details for boss
     this.closePath();
     this.fillPath();
     this.strokePath();
     
-    // Draw inner eye
     this.fillStyle(0x000000, 0.8);
     this.fillCircle(0, 0, size * 0.4);
     this.fillStyle(0xff0000, 1);
     this.fillCircle(0, 0, size * 0.2);
   }
 
-  /**
-   * Set the target to chase (player position)
-   */
   setTarget(x: number, y: number): void {
     this.targetX = x;
     this.targetY = y;
   }
 
-  /**
-   * Update enemy each frame - move toward target
-   */
   update(delta: number = 16): void {
     if (!this.active) return;
     
-    // Update cooldowns
+    // Bosses maintain their own movement and can't be affected by status effects that push them
+    if (this.isBoss()) {
+      // Bosses move normally but can't be pushed by external forces
+      const dx = this.targetX - this.x;
+      const dy = this.targetY - this.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist > 0) {
+        const vx = (dx / dist) * this.config.speed;
+        const vy = (dy / dist) * this.config.speed;
+        this.physicsBody.setVelocity(vx, vy);
+        this.rotation = Math.atan2(dy, dx) + Math.PI / 2;
+      }
+      return;
+    }
+    
+    // Update status effect timers
+    if (this.stunTimer > 0) {
+      this.stunTimer -= delta;
+      if (this.stunTimer <= 0) {
+        this.isStunned = false;
+        this.drawShape();
+      }
+    }
+    
+    if (this.slowTimer > 0) {
+      this.slowTimer -= delta;
+      if (this.slowTimer <= 0) {
+        this.slowPercent = 0;
+      }
+    }
+    
+    // Don't move if stunned
+    if (this.isStunned) {
+      this.physicsBody.setVelocity(0, 0);
+      return;
+    }
+    
     if (this.knockbackTimer > 0) {
       this.knockbackTimer -= delta;
-      return; // Don't chase while knocked back
+      return;
     }
     
     if (this.hitCooldown > 0) {
       this.hitCooldown -= delta;
     }
     
-    // Calculate direction to target
     const dx = this.targetX - this.x;
     const dy = this.targetY - this.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
     
     if (dist > 0) {
-      // Normalize and apply speed
-      const vx = (dx / dist) * this.config.speed;
-      const vy = (dy / dist) * this.config.speed;
+      // Apply slow effect
+      const speedMultiplier = 1 - (this.slowPercent / 100);
+      const effectiveSpeed = this.config.speed * speedMultiplier;
+      
+      const vx = (dx / dist) * effectiveSpeed;
+      const vy = (dy / dist) * effectiveSpeed;
       
       this.physicsBody.setVelocity(vx, vy);
-      
-      // Rotate to face movement direction
       this.rotation = Math.atan2(dy, dx) + Math.PI / 2;
     }
   }
 
-  /**
-   * Apply knockback from a position
-   */
   knockback(fromX: number, fromY: number, force: number = 300): void {
+    // Bosses can't be pushed
+    if (this.isBoss()) return;
+    
     const dx = this.x - fromX;
     const dy = this.y - fromY;
     const dist = Math.sqrt(dx * dx + dy * dy);
@@ -246,30 +267,32 @@ export class Enemy extends Phaser.GameObjects.Graphics {
       this.physicsBody.setVelocity(vx, vy);
     }
     
-    this.knockbackTimer = 200; // 200ms knockback duration
+    this.knockbackTimer = 200;
   }
 
-  /**
-   * Check if enemy can deal damage (not on cooldown)
-   */
   canDealDamage(): boolean {
-    return this.hitCooldown <= 0;
+    return this.hitCooldown <= 0 && !this.isStunned;
   }
 
-  /**
-   * Set hit cooldown after dealing damage
-   */
   setHitCooldown(): void {
-    this.hitCooldown = 500; // 500ms between hits
+    this.hitCooldown = 500;
   }
 
   /**
    * Take damage and return true if destroyed
    */
   takeDamage(amount: number): boolean {
-    this.hp -= amount;
+    // Apply corrosion bonus damage
+    let finalDamage = amount;
+    if (this.isCorrosion) {
+      finalDamage *= 1.3; // +30% damage
+    }
     
-    // Flash effect
+    // Apply entropy stacks
+    finalDamage += this.entropyStacks * 2;
+    
+    this.hp -= finalDamage;
+    
     this.scene.tweens.add({
       targets: this,
       alpha: 0.3,
@@ -285,19 +308,11 @@ export class Enemy extends Phaser.GameObjects.Graphics {
     return false;
   }
 
-  /**
-   * Death effects
-   */
   private die(): void {
-    // Create particle explosion
     this.createDeathParticles();
-    
     this.destroy();
   }
 
-  /**
-   * Particle effect on death
-   */
   private createDeathParticles(): void {
     const particleCount = 8;
     
@@ -323,59 +338,90 @@ export class Enemy extends Phaser.GameObjects.Graphics {
     }
   }
 
+  // ============================================================================
+  // STATUS EFFECT METHODS
+  // ============================================================================
+
   /**
-   * Get damage value
+   * Apply slow effect
    */
+  applySlow(percent: number, duration: number): void {
+    this.slowPercent = Math.max(this.slowPercent, percent);
+    this.slowTimer = Math.max(this.slowTimer, duration);
+  }
+
+  /**
+   * Apply stun effect (only once per field entry)
+   */
+  applyStun(duration: number): void {
+    if (this.hasBeenStunned) return;
+    
+    this.isStunned = true;
+    this.hasBeenStunned = true;
+    this.stunTimer = duration;
+    this.drawShape();
+    
+    // Reset stun immunity after leaving field
+    this.scene.time.delayedCall(duration + 500, () => {
+      this.hasBeenStunned = false;
+    });
+  }
+
+  /**
+   * Set corrosion state (enemies take +30% damage)
+   */
+  setCorrosion(active: boolean): void {
+    if (this.isCorrosion !== active) {
+      this.isCorrosion = active;
+      this.drawShape();
+    }
+  }
+
+  /**
+   * Apply entropy (permanent defense reduction)
+   */
+  applyEntropy(): void {
+    this.entropyStacks++;
+    this.drawShape();
+  }
+
+  // ============================================================================
+  // GETTERS
+  // ============================================================================
+
   getDamage(): number {
     return this.config.damage;
   }
 
-  /**
-   * Get score value
-   */
   getScore(): number {
     return this.config.score;
   }
 
-  /**
-   * Get enemy type
-   */
   getType(): EnemyType {
     return this.config.type;
   }
 
-  /**
-   * Get physics body for collision
-   */
   getPhysicsBody(): Phaser.Physics.Arcade.Body {
     return this.physicsBody;
   }
 
-  /**
-   * Get size for collision checks
-   */
   getSize(): number {
     return this.config.size;
   }
 
-  /**
-   * Check if this is a boss enemy
-   */
   isBoss(): boolean {
     return this.config.isBoss === true;
   }
 
-  /**
-   * Get current HP
-   */
   getHp(): number {
     return this.hp;
   }
 
-  /**
-   * Get maximum HP
-   */
   getMaxHp(): number {
     return this.maxHp;
+  }
+
+  getBody(): Phaser.Physics.Arcade.Body | null {
+    return this.physicsBody;
   }
 }

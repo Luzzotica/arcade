@@ -5,7 +5,9 @@ import type { EnemyType } from '../entities/Enemy';
 import { ExpDrop } from '../entities/ExpDrop';
 import { HexChest } from '../entities/HexChest';
 import { useGameStore } from '../../store/gameStore';
-import { COLORS } from '../config';
+import { COLORS, PLAYER_SPEED } from '../config';
+import { synergyCalculator, type SynergyStats } from '../utils/SynergyCalculator';
+import { SYNERGY_VALUES } from '../config/SynergyConfig';
 
 export class MainScene extends Phaser.Scene {
   private player!: Player;
@@ -13,17 +15,35 @@ export class MainScene extends Phaser.Scene {
   private expDrops: ExpDrop[] = [];
   private hexChests: HexChest[] = [];
   private spawnTimer: number = 0;
-  private spawnInterval: number = 1500; // ms between spawns
+  private spawnInterval: number = 1500;
   private gameStarted: boolean = false;
   private isDead: boolean = false;
   
   // Wave system
   private waveTimer: number = 0;
-  private waveDuration: number = 30000; // 30 seconds per wave
+  private waveDuration: number = 30000;
   private enemiesPerSpawn: number = 1;
   private enemyHpMultiplier: number = 1;
+  private enemyDamageMultiplier: number = 1;
   private bossSpawned: boolean = false;
   private starGraphics!: Phaser.GameObjects.Graphics;
+  
+  // Field visuals
+  private blueFieldGraphics: Phaser.GameObjects.Graphics | null = null;
+  private corrosionFieldGraphics: Phaser.GameObjects.Graphics | null = null;
+  
+  // Regen timers
+  private hpRegenTimer: number = 0;
+  private shieldRegenTimer: number = 0;
+  private regenTickInterval: number = 1000;
+  
+  // Synergy state
+  private currentStats: SynergyStats | null = null;
+  private lastPlayerPos: { x: number; y: number } = { x: 0, y: 0 };
+  private lastHitTime: number = 0; // For Living Hull synergy
+  private barkskinTimer: number = 0; // For Barkskin synergy
+  private barkskinActive: boolean = false;
+  private speedBoostTimer: number = 0; // For Kinetic Absorber synergy
   
   // Store subscription cleanup
   private unsubscribeFromStore: (() => void) | null = null;
@@ -31,58 +51,68 @@ export class MainScene extends Phaser.Scene {
   constructor() {
     super({ key: 'MainScene' });
   }
+  
+  /**
+   * Get current synergy stats (recalculates if needed)
+   */
+  private getStats(): SynergyStats {
+    if (!this.currentStats) {
+      const store = useGameStore.getState();
+      this.currentStats = synergyCalculator.calculate(store.ship);
+    }
+    return this.currentStats;
+  }
+  
+  /**
+   * Update synergy stats and store
+   */
+  private updateSynergyStats(ship: Record<string, import('../../store/gameStore').HexModule>): void {
+    synergyCalculator.invalidate();
+    this.currentStats = synergyCalculator.calculate(ship);
+    
+    // Update store with calculated values
+    useGameStore.setState({
+      shieldRegenRate: this.currentStats.shieldRegenRate,
+      hpRegenRate: this.currentStats.hpRegenRate,
+      activeUltimates: this.currentStats.ultimates,
+      pickupRadiusBonus: this.currentStats.pickupRadiusBonus,
+      damageReduction: this.currentStats.damageReduction,
+    });
+  }
 
   create(): void {
-    // Set world bounds to be much larger (effectively infinite)
     this.physics.world.setBounds(-10000, -10000, 20000, 20000);
-    
-    // Create player at world origin (0, 0)
     this.player = new Player(this, 0, 0);
     
-    // Set camera to follow player with smooth interpolation
     this.cameras.main.setBounds(-10000, -10000, 20000, 20000);
     this.cameras.main.startFollow(this.player.getContainer(), true, 0.1, 0.1);
-    this.cameras.main.setDeadzone(0, 0); // No deadzone - always centered on player
+    this.cameras.main.setDeadzone(0, 0);
     
-    // Register cleanup on scene shutdown/destroy
     this.events.on('shutdown', this.shutdown, this);
     this.events.on('destroy', this.shutdown, this);
     
-    // Subscribe to game store
     this.initStoreSubscription();
-    
-    // Create starfield background
     this.createBackground();
     
-    // Initialize with a default ship for testing
-    // In the real game, this would be triggered by the menu
     const store = useGameStore.getState();
     if (Object.keys(store.ship).length === 0) {
       store.initializeShip('RED');
     }
     
-    // Spawn 15 XP drops at start
     this.spawnInitialExpDrops();
-    
     this.gameStarted = true;
   }
   
-  /**
-   * Spawn initial XP drops at game start
-   */
   private spawnInitialExpDrops(): void {
-    const centerX = 0; // Player starts at world origin
+    const centerX = 0;
     const centerY = 0;
-    const spawnRadius = 300; // Spawn in a circle around player
+    const spawnRadius = 300;
     
     for (let i = 0; i < 15; i++) {
-      // Random angle and distance
       const angle = (Math.PI * 2 / 15) * i + Math.random() * 0.2;
       const distance = 100 + Math.random() * spawnRadius;
-      
       const x = centerX + Math.cos(angle) * distance;
       const y = centerY + Math.sin(angle) * distance;
-      
       const drop = new ExpDrop(this, x, y);
       this.expDrops.push(drop);
     }
@@ -91,33 +121,23 @@ export class MainScene extends Phaser.Scene {
   private pendingShipUpdate: Record<string, import('../../store/gameStore').HexModule> | null = null;
 
   private initStoreSubscription(): void {
-    // Clean up any existing subscription first
     if (this.unsubscribeFromStore) {
       this.unsubscribeFromStore();
       this.unsubscribeFromStore = null;
     }
     
-    // Listen for state changes and store the unsubscribe function
     this.unsubscribeFromStore = useGameStore.subscribe((state, prevState) => {
-      // Safety check: make sure scene is still valid
-      if (!this.scene || !this.scene.manager) {
-        return;
-      }
+      if (!this.scene || !this.scene.manager) return;
       
-      // Defer ship updates to next frame to avoid Phaser crashes during update loop
       if (state.ship !== prevState.ship) {
         this.pendingShipUpdate = state.ship;
+        this.updateSynergyStats(state.ship);
         
-        // If construction mode just closed and we have more boss hexes queued
         if (!state.isConstructionMode && prevState.isConstructionMode && this.bossHexQueue.length > 0) {
-          // Delay to let the UI update
-          this.time.delayedCall(100, () => {
-            this.showNextBossHex();
-          });
+          this.time.delayedCall(100, () => this.showNextBossHex());
         }
       }
       
-      // Handle pause state changes using Phaser's scene pause/resume
       const shouldPause = state.isPaused || state.isConstructionMode || state.showPauseMenu;
       const wasPaused = prevState.isPaused || prevState.isConstructionMode || prevState.showPauseMenu;
       
@@ -128,47 +148,45 @@ export class MainScene extends Phaser.Scene {
       }
     });
     
-    // Initial sync
     const state = useGameStore.getState();
     if (Object.keys(state.ship).length > 0) {
       this.player.initFromStore(state.ship);
+      this.updateSynergyStats(state.ship);
     }
   }
 
-  /**
-   * Clean up when scene is shut down (e.g., returning to menu)
-   */
   shutdown(): void {
-    // Unsubscribe from store to prevent memory leaks and stale callbacks
     if (this.unsubscribeFromStore) {
       this.unsubscribeFromStore();
       this.unsubscribeFromStore = null;
     }
+    
+    // Clean up field graphics
+    if (this.blueFieldGraphics) {
+      this.blueFieldGraphics.destroy();
+      this.blueFieldGraphics = null;
+    }
+    if (this.corrosionFieldGraphics) {
+      this.corrosionFieldGraphics.destroy();
+      this.corrosionFieldGraphics = null;
+    }
   }
 
   private createBackground(): void {
-    // Create starfield background with better visibility
     this.starGraphics = this.add.graphics();
-    
-    // Create stars in a very large area
     const starCount = 1000;
     const starFieldSize = 10000;
     
     for (let i = 0; i < starCount; i++) {
       const x = (Math.random() - 0.5) * starFieldSize;
       const y = (Math.random() - 0.5) * starFieldSize;
-      // More visible stars
       const alpha = 0.4 + Math.random() * 0.6;
       const size = 1 + Math.random() * 2;
       
-      // Varied colors for stars
       const colorRoll = Math.random();
       let color = COLORS.WHITE;
-      if (colorRoll < 0.1) {
-        color = 0x88ccff; // Blue star
-      } else if (colorRoll < 0.15) {
-        color = 0xffcc88; // Yellow/orange star
-      }
+      if (colorRoll < 0.1) color = 0x88ccff;
+      else if (colorRoll < 0.15) color = 0xffcc88;
       
       this.starGraphics.fillStyle(color, alpha);
       this.starGraphics.fillCircle(x, y, size);
@@ -180,71 +198,257 @@ export class MainScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     if (!this.gameStarted) return;
     
-    // Process deferred ship updates (safe to do at start of frame)
     if (this.pendingShipUpdate) {
       this.player.initFromStore(this.pendingShipUpdate);
       this.pendingShipUpdate = null;
     }
     
-    // Scene is paused via scene.pause() when React UIs are open
-    // so we don't need manual pause checks here
+    const store = useGameStore.getState();
+    const stats = this.getStats();
     
-    // Update wave timer
+    // Update timers
+    this.hpRegenTimer += delta;
+    this.shieldRegenTimer += delta;
+    this.barkskinTimer -= delta;
+    this.speedBoostTimer -= delta;
+    
+    // Get player velocity for speed-based synergies
+    const playerVel = this.player.getBody().velocity;
+    const playerSpeed = Math.sqrt(playerVel.x ** 2 + playerVel.y ** 2);
+    const speedRatio = Math.min(1, playerSpeed / PLAYER_SPEED);
+    
+    // Calculate current regen rates
+    let currentHpRegenRate = stats.hpRegenRate;
+    let currentShieldRegenRate = stats.shieldRegenRate;
+    
+    // METABOLISM: Regen rate increases based on move speed
+    if (stats.synergies.metabolism && currentHpRegenRate > 0) {
+      currentHpRegenRate *= (1 + speedRatio);
+    }
+    
+    // ION SHIELD: Moving adds to shield regen
+    if (stats.synergies.ionShield && playerSpeed > 50) {
+      currentShieldRegenRate += speedRatio * 2;
+    }
+    
+    // BARKSKIN: Temporary damage reduction after heal
+    if (this.barkskinTimer > 0 && stats.synergies.barkskin) {
+      this.barkskinActive = true;
+    } else {
+      this.barkskinActive = false;
+    }
+    
+    // LIVING HULL: Heal if not hit for cooldown duration
+    if (stats.synergies.livingHull && _time - this.lastHitTime > SYNERGY_VALUES.LIVING_HULL.cooldown) {
+      if (store.hp < store.maxHp) {
+        store.heal(SYNERGY_VALUES.LIVING_HULL.healAmount);
+        this.lastHitTime = _time;
+      }
+    }
+    
+    // HP Regen
+    if (currentHpRegenRate > 0 && this.hpRegenTimer >= this.regenTickInterval) {
+      this.hpRegenTimer = 0;
+      
+      // OVER_SHIELD: HP regen fills shield when HP is full
+      if (stats.synergies.overShield && store.hp >= store.maxHp) {
+        store.regenShield(currentHpRegenRate);
+      } else {
+        store.heal(currentHpRegenRate);
+      }
+      
+      // BARKSKIN: Grant temporary armor after heal tick
+      if (stats.synergies.barkskin) {
+        this.barkskinTimer = SYNERGY_VALUES.BARKSKIN.duration;
+      }
+    }
+    
+    // Shield Regen
+    if (currentShieldRegenRate > 0 && this.shieldRegenTimer >= this.regenTickInterval) {
+      this.shieldRegenTimer = 0;
+      store.regenShield(currentShieldRegenRate);
+    }
+    
+    // Wave timer
     this.waveTimer += delta;
     if (this.waveTimer >= this.waveDuration) {
       this.advanceWave();
     }
     
-    // Update player (includes shooting)
+    // Update player
     this.player.update(_time, delta);
+    
+    const playerPos = this.player.getPosition();
+    
+    // Update YELLOW synergies (trails, etc.)
+    this.updateYellowSynergies(playerPos, playerSpeed, delta, stats);
+    
+    // Update BLUE field synergies
+    this.updateBlueFieldSynergies(playerPos, delta, stats);
     
     // Update projectiles
     const projectiles = this.player.getProjectiles();
-    projectiles.forEach((projectile) => {
-      projectile.update(_time, delta);
-    });
+    const enemyObjects = this.enemies.filter(e => e.active).map(e => e as Phaser.GameObjects.GameObject);
+    projectiles.forEach((projectile) => projectile.update(_time, delta, enemyObjects));
     
     // Update enemies
-    const playerPos = this.player.getPosition();
     this.enemies.forEach((enemy) => {
       enemy.setTarget(playerPos.x, playerPos.y);
       enemy.update(delta);
     });
     
-    // Check enemy-enemy collisions
     this.checkEnemyEnemyCollisions();
-    
-    // Update boss health bar if boss exists
     this.updateBossHealthBar();
-    
-    // Clean up destroyed enemies
     this.enemies = this.enemies.filter((e) => e.active);
     
-    // Update exp drops
     this.expDrops.forEach((drop) => drop.update());
     this.expDrops = this.expDrops.filter((d) => d.active);
     
-    // Update hex chests
     this.hexChests.forEach((chest) => chest.update());
     this.hexChests = this.hexChests.filter((c) => c.active);
     
-    // Check collisions
     this.checkProjectileCollisions();
     this.checkEnemyCollisions();
     this.checkExpDropCollisions();
     this.checkHexChestCollisions();
     
-    // Spawn enemies
     this.spawnTimer += delta;
     if (this.spawnTimer >= this.spawnInterval) {
       this.spawnTimer = 0;
       this.spawnEnemies();
     }
+    
+    this.lastPlayerPos = playerPos;
   }
 
   /**
-   * Advance to next wave with increased difficulty
+   * Update YELLOW synergies (trails, wake, etc.)
    */
+  private updateYellowSynergies(
+    playerPos: { x: number; y: number },
+    playerSpeed: number,
+    delta: number,
+    stats: SynergyStats
+  ): void {
+    if (playerSpeed < 50) return;
+    
+    const playerAngle = Math.atan2(
+      this.player.getBody().velocity.y,
+      this.player.getBody().velocity.x
+    );
+    
+    // AFTERBURNER: Fire trail DPS
+    if (stats.synergies.afterburner) {
+      const trailLength = 100;
+      const trailX = playerPos.x - Math.cos(playerAngle) * trailLength;
+      const trailY = playerPos.y - Math.sin(playerAngle) * trailLength;
+      
+      this.enemies.forEach((enemy) => {
+        if (!enemy.active) return;
+        const dx = enemy.x - trailX;
+        const dy = enemy.y - trailY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 50) {
+          enemy.takeDamage(5 * (delta / 1000));
+        }
+      });
+    }
+    
+    // VACUUM_WAKE: Pull enemies behind ship
+    if (stats.synergies.vacuumWake) {
+      const wakeLength = SYNERGY_VALUES.VACUUM_WAKE.wakeLength;
+      const wakeX = playerPos.x - Math.cos(playerAngle) * wakeLength;
+      const wakeY = playerPos.y - Math.sin(playerAngle) * wakeLength;
+      
+      this.enemies.forEach((enemy) => {
+        if (!enemy.active || enemy.isBoss()) return; // Bosses can't be pulled
+        const dx = enemy.x - wakeX;
+        const dy = enemy.y - wakeY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < SYNERGY_VALUES.VACUUM_WAKE.wakeRadius) {
+          const pullForce = SYNERGY_VALUES.VACUUM_WAKE.pullForce;
+          const pullAngle = Math.atan2(wakeY - enemy.y, wakeX - enemy.x);
+          const body = enemy.getBody();
+          if (body) {
+            body.setVelocity(
+              body.velocity.x + Math.cos(pullAngle) * pullForce * (delta / 1000),
+              body.velocity.y + Math.sin(pullAngle) * pullForce * (delta / 1000)
+            );
+          }
+        }
+      });
+    }
+  }
+
+  /**
+   * Update BLUE field synergies
+   */
+  private updateBlueFieldSynergies(
+    playerPos: { x: number; y: number },
+    delta: number,
+    stats: SynergyStats
+  ): void {
+    const baseFieldRadius = SYNERGY_VALUES.THERMAL_FIELD.baseRadius + stats.fieldRadius;
+    const hasBlueField = stats.synergies.thermalField || stats.synergies.stasisField || 
+                        stats.synergies.staticCharge || stats.synergies.leechField;
+    
+    // Create or update BLUE field visual
+    if (hasBlueField) {
+      if (!this.blueFieldGraphics) {
+        this.blueFieldGraphics = this.add.graphics();
+        this.blueFieldGraphics.setDepth(1);
+      }
+      
+      // Draw field circle
+      this.blueFieldGraphics.clear();
+      this.blueFieldGraphics.lineStyle(2, COLORS.BLUE, 0.3);
+      this.blueFieldGraphics.strokeCircle(playerPos.x, playerPos.y, baseFieldRadius);
+      
+      // Add pulsing effect
+      const pulseAlpha = 0.1 + Math.sin(this.time.now * 0.005) * 0.1;
+      this.blueFieldGraphics.fillStyle(COLORS.BLUE, pulseAlpha);
+      this.blueFieldGraphics.fillCircle(playerPos.x, playerPos.y, baseFieldRadius);
+    } else {
+      if (this.blueFieldGraphics) {
+        this.blueFieldGraphics.destroy();
+        this.blueFieldGraphics = null;
+      }
+    }
+    
+    if (!hasBlueField) return;
+    
+    this.enemies.forEach((enemy) => {
+      if (!enemy.active) return;
+      
+      const dx = enemy.x - playerPos.x;
+      const dy = enemy.y - playerPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist < baseFieldRadius) {
+        // THERMAL_FIELD: DPS to enemies
+        if (stats.synergies.thermalField) {
+          const damage = stats.fieldDps * (delta / 1000);
+          enemy.takeDamage(damage);
+          
+          // LEECH_FIELD: Heal from damage
+          if (stats.synergies.leechField) {
+            useGameStore.getState().heal(damage * SYNERGY_VALUES.LEECH_FIELD.healRatio);
+          }
+        }
+        
+        // STASIS_FIELD: Slow enemies
+        if (stats.synergies.stasisField) {
+          enemy.applySlow(stats.fieldSlowPercent, 100);
+        }
+        
+        // STATIC_CHARGE: Stun on entry (tracked by enemy)
+        if (stats.synergies.staticCharge) {
+          enemy.applyStun(stats.fieldStunDuration * 1000);
+        }
+      }
+    });
+  }
+
   private advanceWave(): void {
     const store = useGameStore.getState();
     store.nextWave();
@@ -253,72 +457,46 @@ export class MainScene extends Phaser.Scene {
     this.waveTimer = 0;
     this.bossSpawned = false;
     
-    // Increase difficulty each wave
-    this.enemyHpMultiplier = 1 + (currentWave - 1) * 0.25; // +25% HP per wave
-    this.enemiesPerSpawn = Math.min(1 + Math.floor((currentWave - 1) / 2), 5); // +1 enemy every 2 waves, max 5
-    this.spawnInterval = Math.max(1500 - (currentWave - 1) * 100, 500); // Faster spawns, min 500ms
+    // Exponential scaling for HP and damage
+    this.enemyHpMultiplier = 1 + (currentWave - 1) * 0.25;
+    this.enemyDamageMultiplier = Math.pow(1.2, currentWave - 1); // 20% increase per wave (exponential)
+    this.enemiesPerSpawn = Math.min(1 + Math.floor((currentWave - 1) / 2), 5);
+    this.spawnInterval = Math.max(1500 - (currentWave - 1) * 100, 500);
     
-    // Spawn boss every 3 waves
     if (currentWave > 1 && currentWave % 3 === 0) {
-      this.time.delayedCall(1000, () => {
-        this.spawnBoss();
-      });
+      this.time.delayedCall(1000, () => this.spawnBoss());
     }
     
-    // Wave announcement
-    const waveText = this.add.text(
-      this.cameras.main.width / 2,
-      this.cameras.main.height / 3,
-      `WAVE ${currentWave}`,
-      {
-        fontSize: '64px',
-        color: '#ffa502',
-        fontFamily: 'Arial Black',
-      }
-    ).setOrigin(0.5).setScrollFactor(0).setDepth(500);
-    
-    this.tweens.add({
-      targets: waveText,
-      alpha: 0,
-      y: waveText.y - 50,
-      duration: 2000,
-      ease: 'Power2',
-      onComplete: () => waveText.destroy(),
-    });
+    // Show React wave announcement
+    store.setWaveAnnouncement(true);
   }
 
-  /**
-   * Check collisions between enemies (they push each other)
-   */
   private checkEnemyEnemyCollisions(): void {
     for (let i = 0; i < this.enemies.length; i++) {
       for (let j = i + 1; j < this.enemies.length; j++) {
-        const enemy1 = this.enemies[i];
-        const enemy2 = this.enemies[j];
+        const e1 = this.enemies[i];
+        const e2 = this.enemies[j];
+        if (!e1.active || !e2.active) continue;
         
-        if (!enemy1.active || !enemy2.active) continue;
+        // Bosses can't be pushed
+        if (e1.isBoss() || e2.isBoss()) continue;
         
-        const dx = enemy2.x - enemy1.x;
-        const dy = enemy2.y - enemy1.y;
+        const dx = e2.x - e1.x;
+        const dy = e2.y - e1.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const minDist = enemy1.getSize() + enemy2.getSize();
+        const minDist = e1.getSize() + e2.getSize();
         
         if (dist < minDist && dist > 0) {
-          // Push enemies apart
           const overlap = minDist - dist;
           const pushX = (dx / dist) * overlap * 0.5;
           const pushY = (dy / dist) * overlap * 0.5;
-          
-          enemy1.setPosition(enemy1.x - pushX, enemy1.y - pushY);
-          enemy2.setPosition(enemy2.x + pushX, enemy2.y + pushY);
+          e1.setPosition(e1.x - pushX, e1.y - pushY);
+          e2.setPosition(e2.x + pushX, e2.y + pushY);
         }
       }
     }
   }
 
-  /**
-   * Spawn multiple enemies based on current wave
-   */
   private spawnEnemies(): void {
     for (let i = 0; i < this.enemiesPerSpawn; i++) {
       this.spawnEnemy();
@@ -326,85 +504,52 @@ export class MainScene extends Phaser.Scene {
   }
 
   private spawnEnemy(): void {
-    // Spawn enemies relative to camera view (just outside visible area)
     const camera = this.cameras.main;
-    
-    // Get camera bounds in world coordinates
     const camLeft = camera.worldView.x;
     const camRight = camera.worldView.x + camera.worldView.width;
     const camTop = camera.worldView.y;
     const camBottom = camera.worldView.y + camera.worldView.height;
     
-    // Spawn at random edge of camera view
     const side = Math.floor(Math.random() * 4);
     let x: number, y: number;
-    
-    const margin = 100; // Spawn just outside camera view
+    const margin = 100;
     
     switch (side) {
-      case 0: // Top
-        x = camLeft + Math.random() * (camRight - camLeft);
-        y = camTop - margin;
-        break;
-      case 1: // Right
-        x = camRight + margin;
-        y = camTop + Math.random() * (camBottom - camTop);
-        break;
-      case 2: // Bottom
-        x = camLeft + Math.random() * (camRight - camLeft);
-        y = camBottom + margin;
-        break;
-      case 3: // Left
-      default:
-        x = camLeft - margin;
-        y = camTop + Math.random() * (camBottom - camTop);
-        break;
+      case 0: x = camLeft + Math.random() * (camRight - camLeft); y = camTop - margin; break;
+      case 1: x = camRight + margin; y = camTop + Math.random() * (camBottom - camTop); break;
+      case 2: x = camLeft + Math.random() * (camRight - camLeft); y = camBottom + margin; break;
+      default: x = camLeft - margin; y = camTop + Math.random() * (camBottom - camTop); break;
     }
     
-    // Random enemy type weighted toward triangles
     const roll = Math.random();
     let type: EnemyType;
-    if (roll < 0.6) {
-      type = 'TRIANGLE';
-    } else if (roll < 0.85) {
-      type = 'SQUARE';
-    } else {
-      type = 'PENTAGON';
-    }
+    if (roll < 0.6) type = 'TRIANGLE';
+    else if (roll < 0.85) type = 'SQUARE';
+    else type = 'PENTAGON';
     
-    const enemy = new Enemy(this, x, y, type, this.enemyHpMultiplier);
+    const enemy = new Enemy(this, x, y, type, this.enemyHpMultiplier, this.enemyDamageMultiplier);
     this.enemies.push(enemy);
   }
 
-  /**
-   * Spawn a boss enemy
-   */
   private spawnBoss(): void {
     if (this.bossSpawned) return;
     this.bossSpawned = true;
     
     const camera = this.cameras.main;
     const playerPos = this.player.getPosition();
-    
-    // Spawn boss at a random edge, further away
     const angle = Math.random() * Math.PI * 2;
     const distance = Math.max(camera.width, camera.height) * 0.7;
     const x = playerPos.x + Math.cos(angle) * distance;
     const y = playerPos.y + Math.sin(angle) * distance;
     
-    const boss = new Enemy(this, x, y, 'BOSS', this.enemyHpMultiplier);
+    const boss = new Enemy(this, x, y, 'BOSS', this.enemyHpMultiplier, this.enemyDamageMultiplier);
     this.enemies.push(boss);
     
-    // Boss announcement
     const bossText = this.add.text(
       this.cameras.main.width / 2,
       this.cameras.main.height / 2,
       'BOSS INCOMING!',
-      {
-        fontSize: '48px',
-        color: '#ff0000',
-        fontFamily: 'Arial Black',
-      }
+      { fontSize: '48px', color: '#ff0000', fontFamily: 'Arial Black' }
     ).setOrigin(0.5).setScrollFactor(0).setDepth(500);
     
     this.tweens.add({
@@ -416,15 +561,12 @@ export class MainScene extends Phaser.Scene {
       onComplete: () => bossText.destroy(),
     });
     
-    // Screen shake for boss entrance
     this.cameras.main.shake(300, 0.01);
   }
 
-  /**
-   * Check collisions between projectiles and enemies
-   */
   private checkProjectileCollisions(): void {
     const store = useGameStore.getState();
+    const stats = this.getStats();
     const projectiles = this.player.getProjectiles();
     
     for (const projectile of projectiles) {
@@ -433,94 +575,78 @@ export class MainScene extends Phaser.Scene {
       for (const enemy of this.enemies) {
         if (!enemy.active) continue;
         
-        // Distance-based collision
         const dx = enemy.x - projectile.x;
         const dy = enemy.y - projectile.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         const minDist = enemy.getSize() + projectile.config.size;
         
         if (dist < minDist) {
-          // For piercing projectiles, check if we've already hit this enemy
-          if (projectile.isPiercing() && projectile.hasHitEnemy(enemy)) {
-            continue; // Skip this enemy, already hit
-          }
+          if (projectile.isPiercing() && projectile.hasHitEnemy(enemy)) continue;
           
-          // Enemy takes damage
           const wasBoss = enemy.isBoss();
           const enemyType = enemy.getType();
           const destroyed = enemy.takeDamage(projectile.getDamage());
           
-          // Mark this enemy as hit (for piercing projectiles)
-          if (projectile.isPiercing()) {
-            projectile.markEnemyHit(enemy);
+          // HEAVY_IMPACT: Knockback (bosses are immune to physics)
+          if ((projectile as any).isHeavyImpact?.() && !enemy.isBoss()) {
+            const knockbackForce = 500;
+            const knockbackAngle = Math.atan2(enemy.y - projectile.y, enemy.x - projectile.x);
+            const body = enemy.getBody();
+            if (body) {
+              body.setVelocity(
+                body.velocity.x + Math.cos(knockbackAngle) * knockbackForce,
+                body.velocity.y + Math.sin(knockbackAngle) * knockbackForce
+              );
+            }
           }
           
+          if (projectile.isPiercing()) projectile.markEnemyHit(enemy);
+          
           if (destroyed) {
-            // Enemy destroyed
             store.addScore(enemy.getScore());
             
-            // Boss drops a chest with hexagon module(s)
+            // ADRENALINE: Instant heal on kill
+            if (stats.synergies.adrenaline) {
+              store.heal(SYNERGY_VALUES.ADRENALINE.healAmount);
+            }
+            
             if (wasBoss) {
               this.dropHexChestFromBoss(enemy.x, enemy.y);
             } else {
-              // Regular enemies spawn exp drop
-              // Stronger enemies (PENTAGON, SQUARE) drop larger XP
               const dropType = (enemyType === 'PENTAGON' || enemyType === 'SQUARE') ? 'LARGE' : 'SMALL';
               const drop = new ExpDrop(this, enemy.x, enemy.y, dropType);
               this.expDrops.push(drop);
             }
           }
           
-          // Destroy projectile (unless piercing)
-          if (!projectile.isPiercing()) {
-            projectile.destroy();
-          }
+          if (!projectile.isPiercing()) projectile.destroy();
         }
       }
     }
   }
 
-  /**
-   * Drop a hex chest when boss is killed
-   * 1% chance for 5 hexes, 5% chance for 3 hexes, 94% chance for 1 hex
-   */
   private dropHexChestFromBoss(x: number, y: number): void {
     const roll = Math.random();
     let hexCount = 1;
+    if (roll < 0.01) hexCount = 5;
+    else if (roll < 0.06) hexCount = 3;
     
-    if (roll < 0.01) {
-      hexCount = 5; // 1% chance
-    } else if (roll < 0.06) {
-      hexCount = 3; // 5% chance (0.01 to 0.06)
-    }
-    
-    // Generate random hexes for the chest
-    const colors: Array<'RED' | 'GREEN' | 'YELLOW' | 'BLUE' | 'CYAN'> = ['RED', 'GREEN', 'YELLOW', 'BLUE', 'CYAN'];
+    const colors: Array<'RED' | 'GREEN' | 'YELLOW' | 'BLUE' | 'CYAN' | 'ORANGE'> = ['RED', 'GREEN', 'YELLOW', 'BLUE', 'CYAN', 'ORANGE'];
     const hexes: Array<import('../../store/gameStore').HexModule> = [];
     
     for (let i = 0; i < hexCount; i++) {
       const randomColor = colors[Math.floor(Math.random() * colors.length)];
-      hexes.push({
-        type: 'MODULE',
-        color: randomColor,
-        health: 100,
-      });
+      hexes.push({ type: 'MODULE', color: randomColor, health: 100 });
     }
     
-    // Create the chest at the boss's death location
     const chest = new HexChest(this, x, y, hexes);
     this.hexChests.push(chest);
     
-    // Announcement
     const chestText = this.add.text(
       this.cameras.main.width / 2,
       100,
       hexCount > 1 ? `CHEST DROPPED! (${hexCount} HEXES)` : 'CHEST DROPPED!',
-      {
-        fontSize: '28px',
-        color: hexCount >= 5 ? '#ffd700' : hexCount >= 3 ? '#ff00ff' : '#00ffff',
-        fontFamily: 'Arial Black',
-      }
+      { fontSize: '28px', color: hexCount >= 5 ? '#ffd700' : hexCount >= 3 ? '#ff00ff' : '#00ffff', fontFamily: 'Arial Black' }
     ).setOrigin(0.5).setScrollFactor(0).setDepth(500);
     
     this.tweens.add({
@@ -534,9 +660,6 @@ export class MainScene extends Phaser.Scene {
 
   private bossHexQueue: Array<import('../../store/gameStore').HexModule> = [];
 
-  /**
-   * Check collisions between hex chests and player
-   */
   private checkHexChestCollisions(): void {
     const playerPos = this.player.getPosition();
     const playerRadius = this.player.getBody().halfWidth;
@@ -550,36 +673,25 @@ export class MainScene extends Phaser.Scene {
       const pickupDist = playerRadius + chest.getPickupRadius();
       
       if (dist <= pickupDist) {
-        // Pick up the chest - queue all hexes for placement
         this.bossHexQueue = [...chest.getHexes()];
         chest.destroy();
-        
-        // Start placing the first hex
         this.showNextBossHex();
       }
     });
   }
 
-  /**
-   * Show the next hex from boss queue
-   */
   private showNextBossHex(): void {
     if (this.bossHexQueue.length === 0) return;
     
     const nextHex = this.bossHexQueue.shift()!;
     const store = useGameStore.getState();
     
-    // Show announcement if multiple hexes
     if (this.bossHexQueue.length > 0) {
       const remainingText = this.add.text(
         this.cameras.main.width / 2,
         100,
         `${this.bossHexQueue.length + 1} HEXES REMAINING!`,
-        {
-          fontSize: '24px',
-          color: '#ffa502',
-          fontFamily: 'Arial Black',
-        }
+        { fontSize: '24px', color: '#ffa502', fontFamily: 'Arial Black' }
       ).setOrigin(0.5).setScrollFactor(0).setDepth(500);
       
       this.tweens.add({
@@ -593,51 +705,124 @@ export class MainScene extends Phaser.Scene {
     store.setConstructionMode(true, nextHex);
   }
   
-  /**
-   * Check collisions between exp drops and player (with magnet effect)
-   */
   private checkExpDropCollisions(): void {
     const store = useGameStore.getState();
+    const stats = this.getStats();
     const playerPos = this.player.getPosition();
     const playerRadius = this.player.getBody().halfWidth;
-    // Base magnet radius + bonus from CYAN hexes
-    const magnetRadius = 150 + store.pickupRadiusBonus;
+    
+    const magnetRadius = SYNERGY_VALUES.BASE_MAGNET.baseRadius + stats.pickupRadiusBonus;
+    const magnetStrength = stats.magnetStrength || SYNERGY_VALUES.BASE_MAGNET.baseStrength;
     
     this.expDrops.forEach((drop) => {
       if (!drop.active) return;
       
-      // Calculate distance to player
       const dx = drop.x - playerPos.x;
       const dy = drop.y - playerPos.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       const pickupDist = playerRadius + drop.getPickupRadius();
       
-      // Magnet effect - attract drops when within magnet radius
+      // CORROSION_FIELD: Enemies in pickup range take more damage (handled in enemy damage)
+      
       if (dist < magnetRadius && dist > pickupDist) {
-        const magnetStrength = 300; // Speed of attraction
         const vx = -(dx / dist) * magnetStrength;
         const vy = -(dy / dist) * magnetStrength;
         drop.getPhysicsBody().setVelocity(vx, vy);
       } else if (dist <= pickupDist) {
-        // Pick up exp drop - use the drop's exp value
-        store.addExp(drop.getExpValue());
+        const expValue = drop.getExpValue();
+        store.addExp(expValue);
+        
+        // BIO_FUEL or NUTRIENTS: Heal on pickup
+        if (stats.synergies.bioFuel) {
+          store.heal(SYNERGY_VALUES.BIO_FUEL.healOnPickup);
+        }
+        if (stats.synergies.nutrients) {
+          store.heal(SYNERGY_VALUES.NUTRIENTS.healOnPickup);
+        }
+        
+        // ENERGY_SIPHON: Shield on pickup
+        if (stats.synergies.energySiphon) {
+          store.regenShield(expValue * SYNERGY_VALUES.ENERGY_SIPHON.shieldPerExp);
+        }
+        
+        // UNSTABLE_ISOTOPE: Explode on pickup
+        if (stats.synergies.unstableIsotope) {
+          const explosionRadius = SYNERGY_VALUES.UNSTABLE_ISOTOPE.explosionRadius;
+          this.enemies.forEach((enemy) => {
+            if (!enemy.active) return;
+            const edx = enemy.x - drop.x;
+            const edy = enemy.y - drop.y;
+            const edist = Math.sqrt(edx * edx + edy * edy);
+            if (edist < explosionRadius) {
+              enemy.takeDamage(SYNERGY_VALUES.UNSTABLE_ISOTOPE.explosionDamage);
+            }
+          });
+          
+          // Visual explosion effect
+          const explosion = this.add.circle(drop.x, drop.y, 5, 0xff4444, 0.8);
+          this.tweens.add({
+            targets: explosion,
+            radius: explosionRadius,
+            alpha: 0,
+            duration: 200,
+            onComplete: () => explosion.destroy(),
+          });
+        }
+        
         drop.destroy();
       } else {
-        // Stop movement if outside magnet range
         drop.getPhysicsBody().setVelocity(0, 0);
       }
     });
   }
   
-  /**
-   * Check collisions between enemies and player hexagons
-   */
   private checkEnemyCollisions(): void {
     const store = useGameStore.getState();
+    const stats = this.getStats();
     const hexPositions = this.player.getHexWorldPositions();
+    const playerVel = this.player.getBody().velocity;
+    const playerSpeed = Math.sqrt(playerVel.x ** 2 + playerVel.y ** 2);
     
-    this.enemies.forEach((enemy) => {
-      if (!enemy.active) return;
+    // Update Corrosion Field visual
+    const playerPos = this.player.getPosition();
+    if (stats.synergies.corrosionField) {
+      const corrosionRadius = SYNERGY_VALUES.CORROSION_FIELD.baseRadius + stats.pickupRadiusBonus;
+      
+      if (!this.corrosionFieldGraphics) {
+        this.corrosionFieldGraphics = this.add.graphics();
+        this.corrosionFieldGraphics.setDepth(1);
+      }
+      
+      // Draw corrosion field circle (green-tinted)
+      this.corrosionFieldGraphics.clear();
+      this.corrosionFieldGraphics.lineStyle(2, 0x88ff88, 0.4);
+      this.corrosionFieldGraphics.strokeCircle(playerPos.x, playerPos.y, corrosionRadius);
+      
+      // Add pulsing effect
+      const pulseAlpha = 0.05 + Math.sin(this.time.now * 0.004) * 0.05;
+      this.corrosionFieldGraphics.fillStyle(0x88ff88, pulseAlpha);
+      this.corrosionFieldGraphics.fillCircle(playerPos.x, playerPos.y, corrosionRadius);
+    } else {
+      if (this.corrosionFieldGraphics) {
+        this.corrosionFieldGraphics.destroy();
+        this.corrosionFieldGraphics = null;
+      }
+    }
+    
+    for (const enemy of this.enemies) {
+      if (!enemy.active) continue;
+      
+      // CORROSION_FIELD: Apply damage bonus to enemies in pickup range
+      if (stats.synergies.corrosionField) {
+        const dx = enemy.x - playerPos.x;
+        const dy = enemy.y - playerPos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < SYNERGY_VALUES.CORROSION_FIELD.baseRadius + stats.pickupRadiusBonus) {
+          enemy.setCorrosion(true);
+        } else {
+          enemy.setCorrosion(false);
+        }
+      }
       
       // Check collision against each player hex
       let collided = false;
@@ -659,48 +844,127 @@ export class MainScene extends Phaser.Scene {
       }
       
       if (collided) {
-        // Only deal damage if enemy is not on cooldown
+        let enemyDestroyed = false;
+        let wasBoss = false;
+        let enemyType: EnemyType | null = null;
+        
+        // RAMMING_SPEED: Damage enemy at max speed (ONLY if YELLOW + ORANGE synergy)
+        if (stats.synergies.rammingSpeed && playerSpeed > PLAYER_SPEED * SYNERGY_VALUES.RAMMING_SPEED.speedThreshold) {
+          enemyDestroyed = enemy.takeDamage(SYNERGY_VALUES.RAMMING_SPEED.collisionDamage);
+          if (enemyDestroyed) {
+            wasBoss = enemy.isBoss();
+            enemyType = enemy.getType();
+          }
+        }
+        
+        // ENTROPY: Permanent defense reduction on attacker
+        if (stats.synergies.entropy && !enemyDestroyed) {
+          enemy.applyEntropy();
+        }
+        
+        // Handle enemy death from collision damage
+        if (enemyDestroyed) {
+          store.addScore(enemy.getScore());
+          
+          // ADRENALINE: Instant heal on kill
+          if (stats.synergies.adrenaline) {
+            store.heal(SYNERGY_VALUES.ADRENALINE.healAmount);
+          }
+          
+          // Drop XP or chest
+          if (wasBoss) {
+            this.dropHexChestFromBoss(enemy.x, enemy.y);
+          } else if (enemyType) {
+            const dropType = (enemyType === 'PENTAGON' || enemyType === 'SQUARE') ? 'LARGE' : 'SMALL';
+            const drop = new ExpDrop(this, enemy.x, enemy.y, dropType);
+            this.expDrops.push(drop);
+          }
+          
+          // Skip rest of collision handling for destroyed enemy
+          continue;
+        }
+        
         if (enemy.canDealDamage()) {
-          // Player takes damage
-          store.takeDamage(enemy.getDamage());
+          // Calculate damage with BARKSKIN reduction
+          let damage = enemy.getDamage();
+          if (this.barkskinActive) {
+            damage = Math.max(1, damage - SYNERGY_VALUES.BARKSKIN.armorBonus);
+          }
+          
+          store.takeDamage(damage);
           this.player.flashDamage();
-          
-          // Set cooldown so enemy doesn't immediately damage again
           enemy.setHitCooldown();
+          this.lastHitTime = this.time.now;
           
-          // Check game over
+          // KINETIC_ABSORBER: Speed boost on hit
+          if (stats.synergies.kineticAbsorber) {
+            this.speedBoostTimer = SYNERGY_VALUES.KINETIC_ABSORBER.speedBoostDuration;
+          }
+          
+          // REACTIVE_PLATING: Fire shrapnel
+          if (stats.synergies.reactivePlating) {
+            this.fireReactivePlating(closestHexX, closestHexY);
+          }
+          
           if (store.hp <= 0 && !this.isDead) {
             this.playerDeath();
           }
         }
         
-        // Knockback enemy away from the hex they hit
-        enemy.knockback(closestHexX, closestHexY, 400);
+        // Knockback enemy away from the hex they hit (bosses are immune)
+        if (!enemy.isBoss()) {
+          enemy.knockback(closestHexX, closestHexY, 400);
+        }
       }
-    });
+    }
   }
 
   /**
-   * Death explosion animation (reduced for performance)
+   * Fire shrapnel from reactive plating
    */
+  private fireReactivePlating(x: number, y: number): void {
+    const shrapnelCount = SYNERGY_VALUES.REACTIVE_PLATING.shrapnelCount;
+    for (let i = 0; i < shrapnelCount; i++) {
+      const angle = (Math.PI * 2 / shrapnelCount) * i;
+      const shrapnel = this.add.circle(x, y, 3, 0xff8800, 1);
+      
+      const targetX = x + Math.cos(angle) * SYNERGY_VALUES.REACTIVE_PLATING.shrapnelRange;
+      const targetY = y + Math.sin(angle) * SYNERGY_VALUES.REACTIVE_PLATING.shrapnelRange;
+      
+      this.tweens.add({
+        targets: shrapnel,
+        x: targetX,
+        y: targetY,
+        alpha: 0,
+        duration: 300,
+        onComplete: () => shrapnel.destroy(),
+      });
+      
+      // Damage enemies in path
+      this.enemies.forEach((enemy) => {
+        if (!enemy.active) return;
+        const dx = enemy.x - x;
+        const dy = enemy.y - y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < SYNERGY_VALUES.REACTIVE_PLATING.shrapnelRange) {
+          enemy.takeDamage(SYNERGY_VALUES.REACTIVE_PLATING.shrapnelDamage);
+        }
+      });
+    }
+  }
+
   private playerDeath(): void {
     this.isDead = true;
     this.gameStarted = false;
     
     const playerPos = this.player.getPosition();
-    
-    // Hide player hexagons
     this.player.getContainer().setVisible(false);
-    
-    // Stop all movement
     this.player.getBody().setVelocity(0, 0);
     this.player.getBody().setAcceleration(0, 0);
     
-    // Reduced explosion for performance
     const explosionRadius = 100;
-    const particleCount = 20; // Reduced from 100
+    const particleCount = 20;
     
-    // Main explosion flash
     const flash = this.add.circle(playerPos.x, playerPos.y, 0, 0xff4757, 1);
     flash.setDepth(100);
     
@@ -713,11 +977,9 @@ export class MainScene extends Phaser.Scene {
       onComplete: () => flash.destroy(),
     });
     
-    // Reduced explosion rings (2 instead of 5)
     for (let ring = 0; ring < 2; ring++) {
       const ringDelay = ring * 150;
       const ringRadius = explosionRadius * (ring + 1);
-      
       const ringData = { radius: 0 };
       const ringGraphic = this.add.graphics();
       ringGraphic.setDepth(100);
@@ -737,20 +999,13 @@ export class MainScene extends Phaser.Scene {
       });
     }
     
-    // Reduced particle explosion
     for (let i = 0; i < particleCount; i++) {
       const angle = (Math.PI * 2 / particleCount) * i;
       const speed = 150 + Math.random() * 200;
       const size = 2 + Math.random() * 4;
       const color = [0xff4757, 0xff6b81, 0xffffff][Math.floor(Math.random() * 3)];
       
-      const particle = this.add.circle(
-        playerPos.x,
-        playerPos.y,
-        size,
-        color,
-        1
-      );
+      const particle = this.add.circle(playerPos.x, playerPos.y, size, color, 1);
       particle.setDepth(100);
       
       this.tweens.add({
@@ -765,10 +1020,8 @@ export class MainScene extends Phaser.Scene {
       });
     }
     
-    // Reduced screen shake
     this.cameras.main.shake(500, 0.01);
     
-    // Fade to red
     const fadeOverlay = this.add.rectangle(
       this.cameras.main.width / 2,
       this.cameras.main.height / 2,
@@ -786,74 +1039,31 @@ export class MainScene extends Phaser.Scene {
       delay: 200,
     });
     
-    // Show game over after explosion
-    this.time.delayedCall(800, () => {
-      this.gameOver();
-    });
+    this.time.delayedCall(800, () => this.gameOver());
   }
   
   private gameOver(): void {
-    // Display game over - fixed to camera (scrollFactor 0 means it stays on screen)
-    const centerX = this.cameras.main.width / 2;
-    const centerY = this.cameras.main.height / 2;
-    
-    this.add.text(centerX, centerY, 'GAME OVER', {
-      fontSize: '64px',
-      color: '#ff4757',
-      fontFamily: 'Arial Black',
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1001);
-    
-    this.add.text(centerX, centerY + 60, 'Press R to return to menu', {
-      fontSize: '24px',
-      color: '#ffffff',
-      fontFamily: 'Arial',
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1001);
-    
-    // Return to menu on R
-    this.input.keyboard!.once('keydown-R', () => {
-      this.returnToMenu();
-    });
-  }
-  
-  /**
-   * Return to main menu
-   */
-  private returnToMenu(): void {
-    // Dispatch custom event to return to menu
-    window.dispatchEvent(new CustomEvent('game:returnToMenu'));
+    // Set dead state - React UI will handle the display
+    const store = useGameStore.getState();
+    store.setDead(true);
   }
 
-  /**
-   * Update boss health bar (updates store for React component)
-   */
   private updateBossHealthBar(): void {
     const store = useGameStore.getState();
-    
-    // Find active boss
     const boss = this.enemies.find((e) => e.active && e.isBoss());
     
     if (!boss) {
-      // No boss active, hide health bar
       store.setBossHealth(null, null);
       return;
     }
     
-    // Update store with boss health
-    const hp = boss.getHp();
-    const maxHp = boss.getMaxHp();
-    store.setBossHealth(hp, maxHp);
+    store.setBossHealth(boss.getHp(), boss.getMaxHp());
   }
 
-  /**
-   * Get valid attachment points for construction UI
-   */
   getValidAttachmentPoints() {
     return this.player.getValidAttachmentPoints();
   }
 
-  /**
-   * Get pixel position for hex
-   */
   getPixelForHex(hex: { q: number; r: number }) {
     return this.player.getPixelForHex(hex);
   }

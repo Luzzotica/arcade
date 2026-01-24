@@ -1,4 +1,5 @@
 import { useGameStore } from '../store/gameStore';
+import { formatHealthForDisplay } from '../game/config/SynergyConfig';
 import './HUD.css';
 
 export function HUD() {
@@ -27,7 +28,7 @@ export function HUD() {
                 className="bar-fill hp-fill" 
                 style={{ width: `${hpPercent}%` }}
               />
-              <div className="bar-text">{hp} / {maxHp}</div>
+              <div className="bar-text">{formatHealthForDisplay(hp, maxHp)}</div>
             </div>
           </div>
           
@@ -39,7 +40,7 @@ export function HUD() {
                   className="bar-fill shield-fill" 
                   style={{ width: `${shieldPercent}%` }}
                 />
-                <div className="bar-text">{shield} / {maxShield}</div>
+                <div className="bar-text">{formatHealthForDisplay(shield, maxShield)}</div>
               </div>
             </div>
           )}
@@ -52,7 +53,7 @@ export function HUD() {
           </div>
           <div className="wave">
             <span className="wave-label">WAVE</span>
-            <span className="wave-value">{wave}</span>
+            <span className="wave-value">{wave + 1}</span>
           </div>
         </div>
       </div>

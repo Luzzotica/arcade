@@ -1,3 +1,6 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import styles from './page.module.css';
 
@@ -11,7 +14,24 @@ const games = [
   // Add more games here in the future
 ];
 
+interface HexPosition {
+  left: number;
+  top: number;
+}
+
 export default function ArcadePage() {
+  const [hexPositions, setHexPositions] = useState<HexPosition[]>([]);
+
+  useEffect(() => {
+    // Generate random positions only on client side
+    setHexPositions(
+      Array.from({ length: 15 }, () => ({
+        left: Math.random() * 100,
+        top: Math.random() * 100,
+      }))
+    );
+  }, []);
+
   return (
     <div className={styles.container}>
       <div className={styles.content}>
@@ -36,14 +56,14 @@ export default function ArcadePage() {
         </div>
       </div>
       <div className={styles.background}>
-        {[...Array(15)].map((_, i) => (
+        {hexPositions.map((pos, i) => (
           <div
             key={i}
             className={styles.floatingHex}
             style={{
               animationDelay: `${i * 0.2}s`,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
+              left: `${pos.left}%`,
+              top: `${pos.top}%`,
             }}
           >
             ⬡

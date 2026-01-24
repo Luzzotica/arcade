@@ -5,6 +5,8 @@ import { ConstructionUI } from './ConstructionUI';
 import { HUD } from './HUD';
 import { PauseMenu } from './PauseMenu';
 import { BossHealthBar } from './BossHealthBar';
+import { WaveAnnouncement } from './WaveAnnouncement';
+import { DeathScreen } from './DeathScreen';
 import { useGameStore } from '../store/gameStore';
 import styles from './Game.module.css';
 
@@ -17,6 +19,7 @@ export function Game({ onReturnToMenu }: GameProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const isConstructionMode = useGameStore((state) => state.isConstructionMode);
   const showPauseMenu = useGameStore((state) => state.showPauseMenu);
+  const isDead = useGameStore((state) => state.isDead);
   const togglePauseMenu = useGameStore((state) => state.togglePauseMenu);
 
   useEffect(() => {
@@ -70,8 +73,10 @@ export function Game({ onReturnToMenu }: GameProps) {
       <div ref={containerRef} id="game-container" />
       <HUD />
       <BossHealthBar />
+      <WaveAnnouncement />
       {isConstructionMode && <ConstructionUI />}
       {showPauseMenu && <PauseMenu onQuit={onReturnToMenu} />}
+      {isDead && <DeathScreen onReturnToMenu={onReturnToMenu} />}
     </div>
   );
 }

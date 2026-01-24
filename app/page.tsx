@@ -1,6 +1,26 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
+interface HexPosition {
+  left: number;
+  top: number;
+}
+
 export default function Home() {
+  const [hexPositions, setHexPositions] = useState<HexPosition[]>([]);
+
+  useEffect(() => {
+    // Generate random positions only on client side
+    setHexPositions(
+      Array.from({ length: 20 }, () => ({
+        left: Math.random() * 100,
+        top: Math.random() * 100,
+      }))
+    );
+  }, []);
+
   return (
     <div className="relative w-full min-h-screen flex justify-center items-center overflow-hidden bg-gradient-to-b from-[#0a0a14] via-[#1a1a2e] to-[#0a0a14]">
       {/* Background gradient overlays */}
@@ -29,14 +49,14 @@ export default function Home() {
       
       {/* Floating hexagons */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {[...Array(20)].map((_, i) => (
+        {hexPositions.map((pos, i) => (
           <div
             key={i}
             className="absolute text-6xl text-white/[0.03] animate-[float_20s_ease-in-out_infinite]"
             style={{
               animationDelay: `${i * 0.2}s`,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
+              left: `${pos.left}%`,
+              top: `${pos.top}%`,
             }}
           >
             ⬡

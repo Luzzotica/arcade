@@ -1,6 +1,8 @@
 import { create } from 'zustand';
+import type { RingOfPerfectionType } from '../game/utils/SynergyCalculator';
+import { BASE_HEX_STATS } from '../game/config/SynergyConfig';
 
-export type HexColor = 'RED' | 'GREEN' | 'YELLOW' | 'BLUE' | 'CYAN';
+export type HexColor = 'RED' | 'GREEN' | 'YELLOW' | 'BLUE' | 'CYAN' | 'ORANGE';
 export type HexType = 'CORE' | 'MODULE';
 
 export interface HexModule {
@@ -22,6 +24,10 @@ export interface GameState {
   exp: number;
   expToNextLevel: number;
   pickupRadiusBonus: number; // Extra pickup radius from CYAN hexes
+  damageReduction: number; // From ORANGE hexes
+  shieldRegenRate: number; // Calculated from synergies (per second)
+  hpRegenRate: number; // Calculated from synergies (per second)
+  activeUltimates: RingOfPerfectionType[]; // Ring of Perfection effects
   
   // Game state
   isConstructionMode: boolean;
@@ -29,6 +35,8 @@ export interface GameState {
   pendingHexChoices: HexModule[] | null; // For level up: 3 choices
   isPaused: boolean;
   showPauseMenu: boolean; // Show pause menu overlay
+  isDead: boolean; // Player is dead
+  showWaveAnnouncement: boolean; // Show wave announcement overlay
   score: number;
   wave: number;
   
@@ -53,22 +61,50 @@ export interface GameState {
   levelUp: () => void;
   nextWave: () => void;
   setBossHealth: (hp: number | null, maxHp: number | null) => void;
+  setDead: (dead: boolean) => void;
+  setWaveAnnouncement: (show: boolean) => void;
   reset: () => void;
 }
 
-// Calculate stats based on ship composition
-const calculateStats = (ship: Record<string, HexModule>) => {
+// Calculate base stats (without synergies - synergies calculated in game code)
+const calculateBaseStats = (ship: Record<string, HexModule>) => {
   let maxHp = 100; // Base HP
   let maxShield = 0;
   let pickupRadiusBonus = 0;
+  let damageReduction = 0;
   
+  // Base stats from hexes (using config values)
   Object.values(ship).forEach((hex) => {
-    if (hex.color === 'GREEN') maxHp += 10;
-    if (hex.color === 'BLUE') maxShield += 10;
-    if (hex.color === 'CYAN') pickupRadiusBonus += 50; // +50 pickup radius per cyan hex
+    if (hex.color === 'GREEN') maxHp += BASE_HEX_STATS.GREEN.hpPerHex;
+    if (hex.color === 'BLUE') maxShield += BASE_HEX_STATS.BLUE.shieldPerHex;
+    if (hex.color === 'CYAN') pickupRadiusBonus += BASE_HEX_STATS.CYAN.pickupRadiusPerHex;
+    if (hex.color === 'ORANGE') damageReduction += BASE_HEX_STATS.ORANGE.damageReductionPerHex;
   });
   
-  return { maxHp, maxShield, pickupRadiusBonus };
+  return { 
+    maxHp, 
+    maxShield, 
+    pickupRadiusBonus, 
+    damageReduction,
+  };
+};
+
+// Calculate stats with synergies (called from game code, not during SSR)
+const calculateStats = (ship: Record<string, HexModule>) => {
+  const baseStats = calculateBaseStats(ship);
+  let shieldRegenRate = 0;
+  let hpRegenRate = 0;
+  const activeUltimates: RingOfPerfectionType[] = [];
+  
+  // Synergy calculations happen in MainScene/Player where we're guaranteed to be in browser
+  // For now, return base stats - MainScene will update regen rates
+  
+  return { 
+    ...baseStats,
+    shieldRegenRate,
+    hpRegenRate,
+    activeUltimates,
+  };
 };
 
 // Calculate exp needed for next level
@@ -87,11 +123,17 @@ export const useGameStore = create<GameState>((set, get) => ({
   exp: 0,
   expToNextLevel: 10,
   pickupRadiusBonus: 0,
+  damageReduction: 0,
+  shieldRegenRate: 0,
+  hpRegenRate: 0,
+  activeUltimates: [],
   isConstructionMode: false,
   pendingHex: null,
   pendingHexChoices: null,
   isPaused: false,
   showPauseMenu: false,
+  isDead: false,
+  showWaveAnnouncement: false,
   score: 0,
   wave: 1,
   bossHp: null,
@@ -102,15 +144,19 @@ export const useGameStore = create<GameState>((set, get) => ({
     const ship: Record<string, HexModule> = {
       '0,0': { type: 'CORE', color: coreColor, health: 100 },
     };
-    const { maxHp, maxShield, pickupRadiusBonus } = calculateStats(ship);
+    const stats = calculateStats(ship);
     
     set({
       ship,
-      hp: maxHp,
-      maxHp,
-      shield: maxShield,
-      maxShield,
-      pickupRadiusBonus,
+      hp: stats.maxHp,
+      maxHp: stats.maxHp,
+      shield: stats.maxShield,
+      maxShield: stats.maxShield,
+      pickupRadiusBonus: stats.pickupRadiusBonus,
+      damageReduction: stats.damageReduction,
+      shieldRegenRate: stats.shieldRegenRate,
+      hpRegenRate: stats.hpRegenRate,
+      activeUltimates: stats.activeUltimates,
       score: 0,
       wave: 1,
       level: 1,
@@ -122,18 +168,30 @@ export const useGameStore = create<GameState>((set, get) => ({
   // Attach a new hex to the ship
   attachHex: (key: string, hex: HexModule) => {
     const newShip = { ...get().ship, [key]: hex };
-    const { maxHp, maxShield, pickupRadiusBonus } = calculateStats(newShip);
+    const stats = calculateStats(newShip);
     
     // Heal for the HP difference when adding GREEN
-    const hpDiff = maxHp - get().maxHp;
+    const hpDiff = stats.maxHp - get().maxHp;
+    
+    // Auto-fill shield when adding BLUE hex (+10 shield)
+    let newShield = get().shield;
+    if (hex.color === 'BLUE') {
+      newShield = Math.min(get().shield + 10, stats.maxShield);
+    } else {
+      newShield = Math.min(get().shield, stats.maxShield);
+    }
     
     set({
       ship: newShip,
-      maxHp,
-      maxShield,
-      pickupRadiusBonus,
-      hp: Math.min(get().hp + hpDiff, maxHp),
-      shield: Math.min(get().shield, maxShield),
+      maxHp: stats.maxHp,
+      maxShield: stats.maxShield,
+      pickupRadiusBonus: stats.pickupRadiusBonus,
+      damageReduction: stats.damageReduction,
+      shieldRegenRate: stats.shieldRegenRate,
+      hpRegenRate: stats.hpRegenRate,
+      activeUltimates: stats.activeUltimates,
+      hp: Math.min(get().hp + hpDiff, stats.maxHp),
+      shield: newShield,
       isConstructionMode: false,
       pendingHex: null,
       pendingHexChoices: null,
@@ -172,17 +230,20 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
   
-  // Take damage (shield first, then HP)
+  // Take damage (shield first, then HP, with damage reduction only on HP)
   takeDamage: (amount: number) => {
-    const { shield, hp } = get();
+    const { shield, hp, damageReduction } = get();
     
+    // Shield takes full damage (no reduction)
     if (shield >= amount) {
       set({ shield: shield - amount });
     } else {
       const remaining = amount - shield;
+      // Apply damage reduction only to HP damage
+      const reducedHpDamage = Math.max(1, remaining - damageReduction);
       set({
         shield: 0,
-        hp: Math.max(0, hp - remaining),
+        hp: Math.max(0, hp - reducedHpDamage),
       });
     }
   },
@@ -244,7 +305,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   
   // Level up - generate 3 random hex choices for player to pick from
   levelUp: () => {
-    const colors: HexColor[] = ['RED', 'GREEN', 'YELLOW', 'BLUE', 'CYAN'];
+    const colors: HexColor[] = ['RED', 'GREEN', 'YELLOW', 'BLUE', 'CYAN', 'ORANGE'];
     
     // Generate 3 unique random colors
     const shuffled = [...colors].sort(() => Math.random() - 0.5);
@@ -263,6 +324,12 @@ export const useGameStore = create<GameState>((set, get) => ({
   // Set boss health (null to hide)
   setBossHealth: (hp: number | null, maxHp: number | null) => set({ bossHp: hp, bossMaxHp: maxHp }),
   
+  // Set dead state
+  setDead: (dead: boolean) => set({ isDead: dead }),
+  
+  // Set wave announcement visibility
+  setWaveAnnouncement: (show: boolean) => set({ showWaveAnnouncement: show }),
+  
   // Reset game
   reset: () => set({
     ship: {},
@@ -274,11 +341,17 @@ export const useGameStore = create<GameState>((set, get) => ({
     exp: 0,
     expToNextLevel: calculateExpToNextLevel(1),
     pickupRadiusBonus: 0,
+    damageReduction: 0,
+    shieldRegenRate: 0,
+    hpRegenRate: 0,
+    activeUltimates: [],
     isConstructionMode: false,
     pendingHex: null,
     pendingHexChoices: null,
     isPaused: false,
     showPauseMenu: false,
+    isDead: false,
+    showWaveAnnouncement: false,
     score: 0,
     wave: 1,
     bossHp: null,

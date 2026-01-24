@@ -3,6 +3,7 @@ import { useGameStore } from '../store/gameStore';
 import type { HexColor, HexModule } from '../store/gameStore';
 import { HexGrid } from '../game/utils/HexGrid';
 import { HEX_SIZE } from '../game/config';
+import { BASE_STATS_DISPLAY } from '../game/config/SynergyConfig';
 import './ConstructionUI.css';
 
 const hexGrid = new HexGrid(HEX_SIZE);
@@ -13,15 +14,11 @@ const COLOR_VALUES: Record<HexColor, string> = {
   YELLOW: '#ffa502',
   BLUE: '#3742fa',
   CYAN: '#00d9ff',
+  ORANGE: '#ff8800',
 };
 
-const COLOR_DESCRIPTIONS: Record<HexColor, { stat: string; ability: string }> = {
-  RED: { stat: '+5% Global Damage', ability: 'Weapon: Shoots projectiles' },
-  GREEN: { stat: '+10 Max HP', ability: 'Healer: HP regen, buffs bullet size' },
-  YELLOW: { stat: '+5% Move Speed', ability: 'Thruster: Acceleration, buffs fire rate' },
-  BLUE: { stat: '+10 Max Shield', ability: 'Barrier: Shield regen, buffs penetration' },
-  CYAN: { stat: '+50 Pickup Radius', ability: 'Magnet: Increases XP pickup range' },
-};
+// Use config values for descriptions
+const COLOR_DESCRIPTIONS: Record<HexColor, { stat: string; ability: string }> = BASE_STATS_DISPLAY;
 
 interface HexagonProps {
   x: number;

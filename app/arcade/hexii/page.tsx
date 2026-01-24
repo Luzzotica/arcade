@@ -16,8 +16,24 @@ const Game = dynamic(
   }
 );
 
+interface HexPosition {
+  left: number;
+  top: number;
+}
+
 function MainMenu({ onStart }: { onStart: (color: HexColor) => void }) {
   const [selectedColor, setSelectedColor] = useState<HexColor>('RED');
+  const [hexPositions, setHexPositions] = useState<HexPosition[]>([]);
+
+  useEffect(() => {
+    // Generate random positions only on client side
+    setHexPositions(
+      Array.from({ length: 12 }, () => ({
+        left: Math.random() * 100,
+        top: Math.random() * 100,
+      }))
+    );
+  }, []);
 
   const colors: { color: HexColor; name: string; desc: string }[] = [
     { color: 'RED', name: 'Damage', desc: '+5% Global Damage' },
@@ -66,14 +82,14 @@ function MainMenu({ onStart }: { onStart: (color: HexColor) => void }) {
       </div>
       
       <div className={styles.floatingHexes}>
-        {[...Array(12)].map((_, i) => (
+        {hexPositions.map((pos, i) => (
           <div 
             key={i} 
             className={`${styles.floatingHex} ${styles[`hex${i}`]}`}
             style={{
               animationDelay: `${i * 0.3}s`,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
+              left: `${pos.left}%`,
+              top: `${pos.top}%`,
             }}
           >
             ⬡

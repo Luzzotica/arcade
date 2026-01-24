@@ -4,6 +4,7 @@ import type { HexCoord } from '../utils/HexGrid';
 import { COLORS, HEX_SIZE, PLAYER_SPEED, PLAYER_ACCELERATION, PLAYER_DRAG } from '../config';
 import type { HexModule, HexColor } from '../../store/gameStore';
 import { Projectile, type ProjectileConfig } from './Projectile';
+import { synergyCalculator } from '../utils/SynergyCalculator';
 
 export class Player {
   private scene: Phaser.Scene;
@@ -30,11 +31,17 @@ export class Player {
   private projectiles: Projectile[] = [];
   
   // Shooting constants
-  private readonly BASE_FIRE_RATE = 300; // ms between shots
+  private readonly BASE_FIRE_RATE = 1000; // ms between shots (1.0s as per design doc)
   private readonly PROJECTILE_SPEED = 500;
   private readonly PROJECTILE_DAMAGE = 10;
   private readonly PROJECTILE_SIZE = 2; // Doubled from 1
   private readonly PROJECTILE_LIFETIME = 2000; // ms
+  
+  // Movement synergy tracking
+  private lastMoveTime: number = 0;
+  private dashCooldown: number = 0;
+  private lastDashDirection: { x: number; y: number } | null = null;
+  private dashTimeWindow: number = 300; // ms window for double-tap
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene;
@@ -188,9 +195,77 @@ export class Player {
   }
 
   /**
+   * Calculate movement speed multiplier from YELLOW synergies
+   */
+  private calculateMovementSpeedMultiplier(): number {
+    const shipDataRecord: Record<string, HexModule> = {};
+    this.shipData.forEach((value, key) => {
+      shipDataRecord[key] = value;
+    });
+    
+    const stats = synergyCalculator.calculate(shipDataRecord);
+    return stats.moveSpeedMultiplier;
+  }
+  
+  /**
+   * Check for dash (YELLOW + YELLOW - double tap)
+   */
+  private checkDash(delta: number): { dashX: number; dashY: number } | null {
+    const shipDataRecord: Record<string, HexModule> = {};
+    this.shipData.forEach((value, key) => {
+      shipDataRecord[key] = value;
+    });
+    
+    const stats = synergyCalculator.calculate(shipDataRecord);
+    
+    if (!stats.hasDash) {
+      this.dashCooldown = 0;
+      this.lastDashDirection = null;
+      return null;
+    }
+    
+    // Update dash cooldown
+    this.dashCooldown += delta;
+    if (this.dashCooldown > this.dashTimeWindow * 2) {
+      this.lastDashDirection = null;
+    }
+    
+    // Check for double tap
+    let currentDir: { x: number; y: number } | null = null;
+    if (this.cursors.left.isDown) currentDir = { x: -1, y: 0 };
+    else if (this.cursors.right.isDown) currentDir = { x: 1, y: 0 };
+    else if (this.cursors.up.isDown) currentDir = { x: 0, y: -1 };
+    else if (this.cursors.down.isDown) currentDir = { x: 0, y: 1 };
+    
+    if (currentDir) {
+      if (this.lastDashDirection && 
+          this.lastDashDirection.x === currentDir.x && 
+          this.lastDashDirection.y === currentDir.y &&
+          this.dashCooldown < this.dashTimeWindow * 2 &&
+          this.dashCooldown > this.dashTimeWindow) {
+        // Double tap detected - dash!
+        this.dashCooldown = 0;
+        this.lastDashDirection = null;
+        const dashForce = require('../config/SynergyConfig').SYNERGY_VALUES.TURBO.dashForce;
+        return { dashX: currentDir.x * dashForce, dashY: currentDir.y * dashForce };
+      } else {
+        this.lastDashDirection = currentDir;
+        this.dashCooldown = 0;
+      }
+    }
+    
+    return null;
+  }
+  
+  /**
    * Update player each frame
    */
   update(time: number, delta: number): void {
+    // Calculate movement speed multiplier
+    const speedMultiplier = this.calculateMovementSpeedMultiplier();
+    const currentMaxSpeed = PLAYER_SPEED * speedMultiplier;
+    this.body.setMaxVelocity(currentMaxSpeed, currentMaxSpeed);
+    
     // Handle WASD movement
     let accelX = 0;
     let accelY = 0;
@@ -205,6 +280,15 @@ export class Player {
       accelY = -1;
     } else if (this.cursors.down.isDown) {
       accelY = 1;
+    }
+    
+    // Check for dash (YELLOW + YELLOW)
+    const dash = this.checkDash(delta);
+    if (dash) {
+      this.body.setVelocity(
+        this.body.velocity.x + dash.dashX,
+        this.body.velocity.y + dash.dashY
+      );
     }
     
     // Normalize diagonal movement so it's not faster
@@ -291,58 +375,26 @@ export class Player {
   }
   
   /**
-   * Calculate shooting bonuses based on adjacency
+   * Calculate shooting bonuses based on synergies
    */
-  private calculateShootingBonuses(coord: HexCoord, hex: HexModule): {
+  private calculateShootingBonuses(coord: HexCoord, _hex: HexModule): {
     projectileCount: number;
     damageMultiplier: number;
     sizeMultiplier: number;
     fireRateMultiplier: number;
     piercing: boolean;
+    homing: boolean;
+    heavyImpact: boolean;
+    bioOrdnance: boolean;
+    bioOrdnanceCount: number;
+    speedMultiplier: number;
   } {
-    let projectileCount = 1;
-    let damageMultiplier = 1;
-    let sizeMultiplier = 1;
-    let fireRateMultiplier = 1;
-    let piercing = false;
-    
-    const neighbors = this.hexGrid.getNeighbors(coord);
-    
-    neighbors.forEach((neighbor) => {
-      const neighborKey = HexGrid.toKey(neighbor);
-      const neighborHex = this.shipData.get(neighborKey);
-      
-      if (!neighborHex) return;
-      
-      // Red + Red: +1 projectile count
-      if (hex.color === 'RED' && neighborHex.color === 'RED') {
-        projectileCount++;
-      }
-      
-      // Red + Green: Massive bullets (2x damage/size)
-      if (hex.color === 'RED' && neighborHex.color === 'GREEN') {
-        damageMultiplier = Math.max(damageMultiplier, 2);
-        sizeMultiplier = Math.max(sizeMultiplier, 2);
-      }
-      
-      // Red + Yellow: Rapid fire (0.5x cooldown)
-      if (hex.color === 'RED' && neighborHex.color === 'YELLOW') {
-        fireRateMultiplier = Math.min(fireRateMultiplier, 0.5);
-      }
-      
-      // Red + Blue: Piercing bullets
-      if (hex.color === 'RED' && neighborHex.color === 'BLUE') {
-        piercing = true;
-      }
+    const shipDataRecord: Record<string, HexModule> = {};
+    this.shipData.forEach((value, key) => {
+      shipDataRecord[key] = value;
     });
     
-    return {
-      projectileCount,
-      damageMultiplier,
-      sizeMultiplier,
-      fireRateMultiplier,
-      piercing,
-    };
+    return synergyCalculator.getShootingBonuses(coord, shipDataRecord);
   }
   
   /**
@@ -358,6 +410,11 @@ export class Player {
       sizeMultiplier: number;
       fireRateMultiplier: number;
       piercing: boolean;
+      homing: boolean;
+      heavyImpact: boolean;
+      bioOrdnance: boolean;
+      bioOrdnanceCount: number;
+      speedMultiplier: number;
     },
     angleOffset: number = 0
   ): void {
@@ -371,13 +428,22 @@ export class Player {
     const angle = Math.atan2(dy, dx) + angleOffset;
     
     // Create projectile config
+    const baseDamage = this.PROJECTILE_DAMAGE * bonuses.damageMultiplier;
+    const baseSize = this.PROJECTILE_SIZE * bonuses.sizeMultiplier;
+    
     const config: ProjectileConfig = {
-      damage: this.PROJECTILE_DAMAGE * bonuses.damageMultiplier,
-      speed: this.PROJECTILE_SPEED,
-      size: this.PROJECTILE_SIZE * bonuses.sizeMultiplier,
+      damage: baseDamage,
+      speed: this.PROJECTILE_SPEED * bonuses.speedMultiplier,
+      size: baseSize,
       color: COLORS.RED,
       piercing: bonuses.piercing,
       lifetime: this.PROJECTILE_LIFETIME,
+      homing: bonuses.homing,
+      bioOrdnance: bonuses.bioOrdnance,
+      heavyImpact: bonuses.heavyImpact,
+      baseDamage: bonuses.bioOrdnance ? baseDamage : undefined,
+      baseSize: bonuses.bioOrdnance ? baseSize : undefined,
+      bioOrdnanceCount: bonuses.bioOrdnance ? bonuses.bioOrdnanceCount : undefined,
     };
     
     const projectile = new Projectile(this.scene, startX, startY, angle, config);
