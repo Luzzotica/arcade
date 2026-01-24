@@ -11,11 +11,19 @@ export class MainScene extends Phaser.Scene {
   private enemies: Enemy[] = [];
   private expDrops: ExpDrop[] = [];
   private spawnTimer: number = 0;
-  private spawnInterval: number = 2000; // ms between spawns
+  private spawnInterval: number = 1500; // ms between spawns
   private gameStarted: boolean = false;
   private escapeKey!: Phaser.Input.Keyboard.Key;
   private pauseText!: Phaser.GameObjects.Text;
   private isDead: boolean = false;
+  
+  // Wave system
+  private waveTimer: number = 0;
+  private waveDuration: number = 30000; // 30 seconds per wave
+  private enemiesPerSpawn: number = 1;
+  private enemyHpMultiplier: number = 1;
+  private bossSpawned: boolean = false;
+  private starGraphics!: Phaser.GameObjects.Graphics;
 
   constructor() {
     super({ key: 'MainScene' });
@@ -130,25 +138,34 @@ export class MainScene extends Phaser.Scene {
   }
 
   private createBackground(): void {
-    // Create infinite starfield background
-    // Stars will be positioned randomly in world space
-    const graphics = this.add.graphics();
+    // Create starfield background with better visibility
+    this.starGraphics = this.add.graphics();
     
-    // Create stars in a large area around origin
-    const starCount = 500;
-    const starFieldSize = 5000; // Large area for stars
+    // Create stars in a very large area
+    const starCount = 1000;
+    const starFieldSize = 10000;
     
     for (let i = 0; i < starCount; i++) {
       const x = (Math.random() - 0.5) * starFieldSize;
       const y = (Math.random() - 0.5) * starFieldSize;
-      const alpha = 0.2 + Math.random() * 0.3;
-      const size = 0.5 + Math.random() * 1.5;
+      // More visible stars
+      const alpha = 0.4 + Math.random() * 0.6;
+      const size = 1 + Math.random() * 2;
       
-      graphics.fillStyle(COLORS.WHITE, alpha);
-      graphics.fillCircle(x, y, size);
+      // Varied colors for stars
+      const colorRoll = Math.random();
+      let color = COLORS.WHITE;
+      if (colorRoll < 0.1) {
+        color = 0x88ccff; // Blue star
+      } else if (colorRoll < 0.15) {
+        color = 0xffcc88; // Yellow/orange star
+      }
+      
+      this.starGraphics.fillStyle(color, alpha);
+      this.starGraphics.fillCircle(x, y, size);
     }
     
-    graphics.setDepth(-1);
+    this.starGraphics.setDepth(-1);
   }
 
   update(_time: number, delta: number): void {
@@ -163,6 +180,12 @@ export class MainScene extends Phaser.Scene {
     const store = useGameStore.getState();
     if (store.isPaused) return;
     
+    // Update wave timer
+    this.waveTimer += delta;
+    if (this.waveTimer >= this.waveDuration) {
+      this.advanceWave();
+    }
+    
     // Update player (includes shooting)
     this.player.update(_time, delta);
     
@@ -176,8 +199,11 @@ export class MainScene extends Phaser.Scene {
     const playerPos = this.player.getPosition();
     this.enemies.forEach((enemy) => {
       enemy.setTarget(playerPos.x, playerPos.y);
-      enemy.update();
+      enemy.update(delta);
     });
+    
+    // Check enemy-enemy collisions
+    this.checkEnemyEnemyCollisions();
     
     // Clean up destroyed enemies
     this.enemies = this.enemies.filter((e) => e.active);
@@ -195,6 +221,89 @@ export class MainScene extends Phaser.Scene {
     this.spawnTimer += delta;
     if (this.spawnTimer >= this.spawnInterval) {
       this.spawnTimer = 0;
+      this.spawnEnemies();
+    }
+  }
+
+  /**
+   * Advance to next wave with increased difficulty
+   */
+  private advanceWave(): void {
+    const store = useGameStore.getState();
+    store.nextWave();
+    
+    const currentWave = store.wave;
+    this.waveTimer = 0;
+    this.bossSpawned = false;
+    
+    // Increase difficulty each wave
+    this.enemyHpMultiplier = 1 + (currentWave - 1) * 0.25; // +25% HP per wave
+    this.enemiesPerSpawn = Math.min(1 + Math.floor((currentWave - 1) / 2), 5); // +1 enemy every 2 waves, max 5
+    this.spawnInterval = Math.max(1500 - (currentWave - 1) * 100, 500); // Faster spawns, min 500ms
+    
+    // Spawn boss every 3 waves
+    if (currentWave > 1 && currentWave % 3 === 0) {
+      this.time.delayedCall(1000, () => {
+        this.spawnBoss();
+      });
+    }
+    
+    // Wave announcement
+    const waveText = this.add.text(
+      this.cameras.main.width / 2,
+      this.cameras.main.height / 3,
+      `WAVE ${currentWave}`,
+      {
+        fontSize: '64px',
+        color: '#ffa502',
+        fontFamily: 'Arial Black',
+      }
+    ).setOrigin(0.5).setScrollFactor(0).setDepth(500);
+    
+    this.tweens.add({
+      targets: waveText,
+      alpha: 0,
+      y: waveText.y - 50,
+      duration: 2000,
+      ease: 'Power2',
+      onComplete: () => waveText.destroy(),
+    });
+  }
+
+  /**
+   * Check collisions between enemies (they push each other)
+   */
+  private checkEnemyEnemyCollisions(): void {
+    for (let i = 0; i < this.enemies.length; i++) {
+      for (let j = i + 1; j < this.enemies.length; j++) {
+        const enemy1 = this.enemies[i];
+        const enemy2 = this.enemies[j];
+        
+        if (!enemy1.active || !enemy2.active) continue;
+        
+        const dx = enemy2.x - enemy1.x;
+        const dy = enemy2.y - enemy1.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const minDist = enemy1.getSize() + enemy2.getSize();
+        
+        if (dist < minDist && dist > 0) {
+          // Push enemies apart
+          const overlap = minDist - dist;
+          const pushX = (dx / dist) * overlap * 0.5;
+          const pushY = (dy / dist) * overlap * 0.5;
+          
+          enemy1.setPosition(enemy1.x - pushX, enemy1.y - pushY);
+          enemy2.setPosition(enemy2.x + pushX, enemy2.y + pushY);
+        }
+      }
+    }
+  }
+
+  /**
+   * Spawn multiple enemies based on current wave
+   */
+  private spawnEnemies(): void {
+    for (let i = 0; i < this.enemiesPerSpawn; i++) {
       this.spawnEnemy();
     }
   }
@@ -246,8 +355,52 @@ export class MainScene extends Phaser.Scene {
       type = 'PENTAGON';
     }
     
-    const enemy = new Enemy(this, x, y, type);
+    const enemy = new Enemy(this, x, y, type, this.enemyHpMultiplier);
     this.enemies.push(enemy);
+  }
+
+  /**
+   * Spawn a boss enemy
+   */
+  private spawnBoss(): void {
+    if (this.bossSpawned) return;
+    this.bossSpawned = true;
+    
+    const camera = this.cameras.main;
+    const playerPos = this.player.getPosition();
+    
+    // Spawn boss at a random edge, further away
+    const angle = Math.random() * Math.PI * 2;
+    const distance = Math.max(camera.width, camera.height) * 0.7;
+    const x = playerPos.x + Math.cos(angle) * distance;
+    const y = playerPos.y + Math.sin(angle) * distance;
+    
+    const boss = new Enemy(this, x, y, 'BOSS', this.enemyHpMultiplier);
+    this.enemies.push(boss);
+    
+    // Boss announcement
+    const bossText = this.add.text(
+      this.cameras.main.width / 2,
+      this.cameras.main.height / 2,
+      'BOSS INCOMING!',
+      {
+        fontSize: '48px',
+        color: '#ff0000',
+        fontFamily: 'Arial Black',
+      }
+    ).setOrigin(0.5).setScrollFactor(0).setDepth(500);
+    
+    this.tweens.add({
+      targets: bossText,
+      alpha: 0,
+      scale: 1.5,
+      duration: 1500,
+      ease: 'Power2',
+      onComplete: () => bossText.destroy(),
+    });
+    
+    // Screen shake for boss entrance
+    this.cameras.main.shake(300, 0.01);
   }
 
   /**
@@ -271,28 +424,45 @@ export class MainScene extends Phaser.Scene {
         
         if (dist < minDist) {
           // Enemy takes damage
+          const wasBoss = enemy.isBoss();
           const destroyed = enemy.takeDamage(projectile.getDamage());
           
           if (destroyed) {
             // Enemy destroyed
             store.addScore(enemy.getScore());
             
-            // Spawn exp drop
-            const drop = new ExpDrop(this, enemy.x, enemy.y);
-            this.expDrops.push(drop);
-            
-            // Particle effect already handled in Enemy.die()
+            // Boss drops a hexagon module
+            if (wasBoss) {
+              this.dropHexFromBoss();
+            } else {
+              // Regular enemies spawn exp drop
+              const drop = new ExpDrop(this, enemy.x, enemy.y);
+              this.expDrops.push(drop);
+            }
           }
           
           // Destroy projectile (unless piercing)
           if (!projectile.isPiercing()) {
             projectile.destroy();
-          } else {
-            // For piercing projectiles, mark but don't destroy immediately
-            // They can hit multiple enemies
           }
         }
       });
+    });
+  }
+
+  /**
+   * Drop a hexagon module when boss is killed
+   */
+  private dropHexFromBoss(): void {
+    const store = useGameStore.getState();
+    const colors: Array<'RED' | 'GREEN' | 'YELLOW' | 'BLUE'> = ['RED', 'GREEN', 'YELLOW', 'BLUE'];
+    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+    
+    // Enter construction mode with the dropped hex
+    store.setConstructionMode(true, {
+      type: 'MODULE',
+      color: randomColor,
+      health: 100,
     });
   }
   
@@ -349,18 +519,23 @@ export class MainScene extends Phaser.Scene {
       const minDist = playerRadius + enemy.getSize();
       
       if (dist < minDist) {
-        // Player takes damage
-        store.takeDamage(enemy.getDamage());
-        this.player.flashDamage();
-        
-        // Destroy enemy on contact (they're melee)
-        store.addScore(enemy.getScore());
-        enemy.takeDamage(9999);
-        
-        // Check game over
-        if (store.hp <= 0 && !this.isDead) {
-          this.playerDeath();
+        // Only deal damage if enemy is not on cooldown
+        if (enemy.canDealDamage()) {
+          // Player takes damage
+          store.takeDamage(enemy.getDamage());
+          this.player.flashDamage();
+          
+          // Set cooldown so enemy doesn't immediately damage again
+          enemy.setHitCooldown();
+          
+          // Check game over
+          if (store.hp <= 0 && !this.isDead) {
+            this.playerDeath();
+          }
         }
+        
+        // Knockback enemy away from player (they don't die)
+        enemy.knockback(playerPos.x, playerPos.y, 400);
       }
     });
   }

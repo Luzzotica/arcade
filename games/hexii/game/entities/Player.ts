@@ -202,21 +202,22 @@ export class Player {
     let accelY = 0;
     
     if (this.cursors.left.isDown) {
-      accelX = -PLAYER_ACCELERATION;
+      accelX = -1;
     } else if (this.cursors.right.isDown) {
-      accelX = PLAYER_ACCELERATION;
+      accelX = 1;
     }
     
     if (this.cursors.up.isDown) {
-      accelY = -PLAYER_ACCELERATION;
+      accelY = -1;
     } else if (this.cursors.down.isDown) {
-      accelY = PLAYER_ACCELERATION;
+      accelY = 1;
     }
     
-    // Normalize diagonal movement
-    if (accelX !== 0 && accelY !== 0) {
-      accelX *= 0.707;
-      accelY *= 0.707;
+    // Normalize diagonal movement so it's not faster
+    if (accelX !== 0 || accelY !== 0) {
+      const magnitude = Math.sqrt(accelX * accelX + accelY * accelY);
+      accelX = (accelX / magnitude) * PLAYER_ACCELERATION;
+      accelY = (accelY / magnitude) * PLAYER_ACCELERATION;
     }
     
     this.body.setAcceleration(accelX, accelY);
