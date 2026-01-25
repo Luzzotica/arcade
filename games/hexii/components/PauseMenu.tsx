@@ -60,7 +60,7 @@ export function PauseMenu({ onQuit }: PauseMenuProps) {
         <div className="pause-stats">
           <div className="pause-stat">
             <span className="stat-label">Score</span>
-            <span className="stat-value">{score.toLocaleString()}</span>
+            <span className="stat-value score-value">{score.toLocaleString()}</span>
           </div>
           <div className="pause-stat">
             <span className="stat-label">Wave</span>

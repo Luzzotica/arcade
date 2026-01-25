@@ -20,7 +20,7 @@ export async function GET(
   // Get user's personal best
   const { data: personalBest } = await adminClient
     .from('high_scores')
-    .select('score, wave, level, play_time_seconds, created_at')
+    .select('score, metadata, play_time_seconds, created_at')
     .eq('user_id', user.id)
     .eq('game_id', gameId)
     .order('score', { ascending: false })
@@ -66,11 +66,16 @@ export async function GET(
     }
   }
 
+  // Extract wave and level from metadata
+  const metadata = personalBest?.metadata as Record<string, unknown> | null;
+  const wave = metadata?.wave as number | undefined;
+  const level = metadata?.level as number | undefined;
+
   return NextResponse.json({
     personal_best: personalBest ? {
       score: personalBest.score,
-      wave: personalBest.wave,
-      level: personalBest.level,
+      wave: wave ?? null,
+      level: level ?? null,
       play_time_seconds: personalBest.play_time_seconds,
       achieved_at: personalBest.created_at,
     } : null,

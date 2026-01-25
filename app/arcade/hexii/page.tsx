@@ -7,8 +7,10 @@ import { useGameStore } from '@/games/hexii/store/gameStore';
 import type { HexColor } from '@/games/hexii/store/gameStore';
 import { audioManager } from '@/games/hexii/game/audio/AudioManager';
 import { OptionsMenu } from '@/games/hexii/components/OptionsMenu';
+import { Leaderboard } from '@/games/hexii/components/Leaderboard';
 import { UserMenu } from '@/components/auth/UserMenu';
-import { usePresence } from '@/lib/supabase/hooks';
+import { usePresence, useHighScores } from '@/lib/supabase/hooks';
+import { useAuth } from '@/lib/supabase/auth-context';
 import styles from './page.module.css';
 
 // Dynamically import Game component to prevent SSR issues with Phaser
@@ -25,11 +27,14 @@ interface HexPosition {
   top: number;
 }
 
-function MainMenu({ onStart }: { onStart: (color: HexColor) => void }) {
+function MainMenu({ onStart, refreshKey }: { onStart: (color: HexColor) => void; refreshKey?: number }) {
   const [selectedColor, setSelectedColor] = useState<HexColor>('RED');
   const [hexPositions, setHexPositions] = useState<HexPosition[]>([]);
   const [showOptions, setShowOptions] = useState(false);
+  const [personalBest, setPersonalBest] = useState<number | null>(null);
   const { currentGamePlayers } = usePresence('hexii');
+  const { user } = useAuth();
+  const { getPersonalBest } = useHighScores('hexii');
 
   useEffect(() => {
     // Generate random positions only on client side
@@ -42,7 +47,20 @@ function MainMenu({ onStart }: { onStart: (color: HexColor) => void }) {
     
     // Start title music
     audioManager.playMusic('title');
-  }, []);
+
+    // Fetch personal best score
+    if (user) {
+      getPersonalBest().then((pb) => {
+        if (pb) {
+          setPersonalBest(pb.score);
+        } else {
+          setPersonalBest(null);
+        }
+      });
+    } else {
+      setPersonalBest(null);
+    }
+  }, [user, refreshKey, getPersonalBest]);
   
   const handleColorSelect = (color: HexColor) => {
     audioManager.playSFX('ui-click');
@@ -95,6 +113,12 @@ function MainMenu({ onStart }: { onStart: (color: HexColor) => void }) {
         </h1>
         <p className={styles.tagline}>Prove that Hexagons are the Bestagons.</p>
         
+        {personalBest !== null && (
+          <div className={styles.personalBest}>
+            Your Best: <span className={styles.personalBestScore}>{personalBest.toLocaleString()}</span>
+          </div>
+        )}
+        
         <div className={styles.coreSelection}>
           <h2>SELECT YOUR CORE</h2>
           <div className={styles.colorOptions}>
@@ -125,6 +149,8 @@ function MainMenu({ onStart }: { onStart: (color: HexColor) => void }) {
         <div className={styles.controlsHint}>
           <p><strong>WASD</strong> to move • <strong>MOUSE</strong> to aim</p>
         </div>
+
+        <Leaderboard refreshKey={refreshKey} />
       </div>
       
       <div className={styles.floatingHexes}>
@@ -150,6 +176,7 @@ function MainMenu({ onStart }: { onStart: (color: HexColor) => void }) {
 
 export default function HexiiPage() {
   const [gameStarted, setGameStarted] = useState(false);
+  const [menuRefreshKey, setMenuRefreshKey] = useState(0);
   const initializeShip = useGameStore((state) => state.initializeShip);
   const setConstructionMode = useGameStore((state) => state.setConstructionMode);
 
@@ -181,12 +208,13 @@ export default function HexiiPage() {
     audioManager.crossfadeTo('title');
     useGameStore.getState().reset();
     setGameStarted(false);
+    setMenuRefreshKey((prev) => prev + 1); // Trigger refresh of menu data
   };
 
   return (
     <div className={styles.app}>
       {!gameStarted ? (
-        <MainMenu onStart={handleStart} />
+        <MainMenu onStart={handleStart} refreshKey={menuRefreshKey} />
       ) : (
         <Game onReturnToMenu={handleReturnToMenu} />
       )}

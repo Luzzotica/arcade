@@ -75,6 +75,11 @@
   color: #fff;
 }
 
+.stat-value.score-value {
+  color: #ffa502;
+  text-shadow: 0 0 10px rgba(255, 165, 2, 0.5);
+}
+
 .pause-actions {
   display: flex;
   flex-direction: column;

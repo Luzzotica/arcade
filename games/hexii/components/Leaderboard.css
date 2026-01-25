@@ -1,0 +1,122 @@
+.leaderboard-container {
+  margin: 40px auto 0;
+  width: 100%;
+  max-width: 500px;
+  background: linear-gradient(145deg, rgba(26, 26, 46, 0.95), rgba(20, 20, 40, 0.98));
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.7),
+    0 0 40px rgba(55, 66, 250, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.leaderboard-title {
+  font-family: 'Orbitron', 'Courier New', monospace;
+  font-size: 14px;
+  letter-spacing: 6px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 20px;
+  text-align: center;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.leaderboard-loading,
+.leaderboard-empty {
+  font-family: 'Orbitron', 'Courier New', monospace;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+  padding: 20px;
+}
+
+.leaderboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  font-family: 'Orbitron', 'Courier New', monospace;
+}
+
+.leaderboard-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.leaderboard-row.current-user {
+  background: rgba(55, 66, 250, 0.2);
+  border: 1px solid rgba(55, 66, 250, 0.4);
+  box-shadow: 0 0 10px rgba(55, 66, 250, 0.3);
+}
+
+.leaderboard-rank {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: right;
+}
+
+.leaderboard-row.current-user .leaderboard-rank {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.leaderboard-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard-row.current-user .leaderboard-name {
+  color: #fff;
+  font-weight: 700;
+}
+
+.leaderboard-score {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffa502;
+  text-align: right;
+}
+
+.leaderboard-row.current-user .leaderboard-score {
+  color: #ffb733;
+}
+
+/* Scrollbar styling */
+.leaderboard-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.leaderboard-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.leaderboard-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.leaderboard-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}

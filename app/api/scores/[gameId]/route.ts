@@ -12,14 +12,12 @@ export async function GET(
   const supabase = createAdminClient();
 
   // Get best scores per user for this game, joining with public profiles only
-  // Using raw SQL for the aggregation
   const { data, error } = await supabase
     .from('high_scores')
     .select(`
       user_id,
       score,
-      wave,
-      level,
+      metadata,
       profiles!inner (
         display_name,
         is_public
@@ -37,8 +35,8 @@ export async function GET(
   const userBests = new Map<string, {
     display_name: string;
     best_score: number;
-    best_wave: number;
-    best_level: number;
+    best_wave: number | null;
+    best_level: number | null;
     total_plays: number;
   }>();
 
@@ -49,12 +47,17 @@ export async function GET(
     const profile = Array.isArray(profiles) ? profiles[0] : profiles;
     const displayName = profile?.display_name || 'Anonymous';
     
+    // Extract wave and level from metadata
+    const metadata = entry.metadata as Record<string, unknown> | null;
+    const wave = metadata?.wave as number | undefined;
+    const level = metadata?.level as number | undefined;
+    
     if (!userBests.has(userId)) {
       userBests.set(userId, {
         display_name: displayName,
         best_score: entry.score,
-        best_wave: entry.wave,
-        best_level: entry.level,
+        best_wave: wave ?? null,
+        best_level: level ?? null,
         total_plays: 1,
       });
     } else {
@@ -62,12 +65,17 @@ export async function GET(
       existing.total_plays++;
       if (entry.score > existing.best_score) {
         existing.best_score = entry.score;
-      }
-      if (entry.wave > existing.best_wave) {
-        existing.best_wave = entry.wave;
-      }
-      if (entry.level > existing.best_level) {
-        existing.best_level = entry.level;
+        // Update wave/level when we find a new best score
+        if (wave !== undefined) existing.best_wave = Math.max(existing.best_wave ?? 0, wave);
+        if (level !== undefined) existing.best_level = Math.max(existing.best_level ?? 0, level);
+      } else {
+        // Still track max wave/level even if not best score
+        if (wave !== undefined && (existing.best_wave === null || wave > existing.best_wave)) {
+          existing.best_wave = wave;
+        }
+        if (level !== undefined && (existing.best_level === null || level > existing.best_level)) {
+          existing.best_level = level;
+        }
       }
     }
   });

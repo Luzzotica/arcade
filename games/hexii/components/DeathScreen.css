@@ -75,8 +75,8 @@
   font-family: 'Orbitron', 'Courier New', monospace;
   font-size: 28px;
   font-weight: 700;
-  color: #fff;
-  text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+  color: #ffa502;
+  text-shadow: 0 0 10px rgba(255, 165, 2, 0.5);
 }
 
 .death-btn {
@@ -225,6 +225,6 @@
 }
 
 .lb-score {
-  color: #3742fa;
+  color: #ffa502;
   font-weight: 700;
 }

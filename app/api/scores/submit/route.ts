@@ -5,8 +5,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 interface SubmitScoreRequest {
   game_id: string;
   score: number;
-  wave: number;
-  level: number;
+  wave?: number;
+  level?: number;
   play_time_seconds: number;
   session_id?: string;
 }
@@ -42,14 +42,15 @@ export async function POST(request: Request) {
       );
     }
 
-    if (body.wave < 1 || body.wave > 1000) {
+    // Validate optional game-specific metadata
+    if (body.wave !== undefined && (body.wave < 1 || body.wave > 1000)) {
       return NextResponse.json(
         { error: 'Invalid wave value' },
         { status: 400 }
       );
     }
 
-    if (body.level < 1 || body.level > 1000) {
+    if (body.level !== undefined && (body.level < 1 || body.level > 1000)) {
       return NextResponse.json(
         { error: 'Invalid level value' },
         { status: 400 }
@@ -59,15 +60,19 @@ export async function POST(request: Request) {
     // Use admin client to insert the score (bypasses RLS)
     const adminClient = createAdminClient();
 
+    // Build metadata object with game-specific data
+    const metadata: Record<string, unknown> = {};
+    if (body.wave !== undefined) metadata.wave = Math.floor(body.wave);
+    if (body.level !== undefined) metadata.level = Math.floor(body.level);
+
     const { data, error: insertError } = await adminClient
       .from('high_scores')
       .insert({
         user_id: user.id,
         game_id: body.game_id,
         score: Math.floor(body.score),
-        wave: Math.floor(body.wave),
-        level: Math.floor(body.level),
         play_time_seconds: Math.floor(body.play_time_seconds || 0),
+        metadata: Object.keys(metadata).length > 0 ? metadata : null,
       })
       .select('id')
       .single();
@@ -82,14 +87,26 @@ export async function POST(request: Request) {
 
     // Optionally update the game session with final stats
     if (body.session_id) {
+      const sessionUpdate: {
+        ended_at: string;
+        final_score: number;
+        final_wave?: number;
+        final_level?: number;
+      } = {
+        ended_at: new Date().toISOString(),
+        final_score: Math.floor(body.score),
+      };
+      
+      if (body.wave !== undefined) {
+        sessionUpdate.final_wave = Math.floor(body.wave);
+      }
+      if (body.level !== undefined) {
+        sessionUpdate.final_level = Math.floor(body.level);
+      }
+      
       await adminClient
         .from('game_sessions')
-        .update({
-          ended_at: new Date().toISOString(),
-          final_score: Math.floor(body.score),
-          final_wave: Math.floor(body.wave),
-          final_level: Math.floor(body.level),
-        })
+        .update(sessionUpdate)
         .eq('id', body.session_id);
     }
 

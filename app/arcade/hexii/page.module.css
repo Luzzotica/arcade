@@ -4,11 +4,12 @@
 
 .app {
   width: 100vw;
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   justify-content: center;
-  align-items: center;
-  overflow: hidden;
+  align-items: flex-start;
+  overflow-y: auto;
+  overflow-x: hidden;
   font-family: 'Orbitron', 'Courier New', monospace;
 }
 
@@ -16,15 +17,15 @@
 .mainMenu {
   position: relative;
   width: 100%;
-  height: 100%;
+  min-height: 100vh;
   background: 
     radial-gradient(ellipse at 30% 20%, rgba(55, 66, 250, 0.15) 0%, transparent 50%),
     radial-gradient(ellipse at 70% 80%, rgba(255, 71, 87, 0.1) 0%, transparent 50%),
     linear-gradient(180deg, #0a0a14 0%, #1a1a2e 50%, #0a0a14 100%);
   display: flex;
   justify-content: center;
-  align-items: center;
-  overflow: hidden;
+  align-items: flex-start;
+  overflow: visible;
 }
 
 .menuHeader {
@@ -86,7 +87,9 @@
   position: relative;
   z-index: 10;
   text-align: center;
-  padding: 40px;
+  padding: 120px 40px 40px;
+  width: 100%;
+  max-width: 1200px;
 }
 
 .gameTitle {
@@ -119,8 +122,26 @@
   font-size: 16px;
   color: rgba(255, 255, 255, 0.6);
   letter-spacing: 4px;
-  margin-bottom: 60px;
+  margin-bottom: 16px;
   text-transform: uppercase;
+}
+
+.personalBest {
+  font-family: 'Orbitron', 'Courier New', monospace;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 2px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.personalBestScore {
+  color: #ffa502;
+  font-weight: 700;
+  font-size: 16px;
 }
 
 .coreSelection {
