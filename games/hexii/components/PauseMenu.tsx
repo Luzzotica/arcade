@@ -21,18 +21,6 @@ export function PauseMenu({ onQuit }: PauseMenuProps) {
     closePauseMenu();
   };
 
-  const handleRestart = () => {
-    audioManager.playSFX('ui-click');
-    // Get current core color before reset
-    const ship = useGameStore.getState().ship;
-    const coreHex = ship['0,0'];
-    const coreColor = coreHex?.color || 'RED';
-    
-    reset();
-    useGameStore.getState().initializeShip(coreColor);
-    closePauseMenu();
-  };
-
   const handleQuit = () => {
     audioManager.playSFX('ui-click');
     reset();
@@ -78,9 +66,6 @@ export function PauseMenu({ onQuit }: PauseMenuProps) {
           </button>
           <button className="pause-btn pause-btn-options" onClick={handleOptions} onMouseEnter={handleHover}>
             OPTIONS
-          </button>
-          <button className="pause-btn pause-btn-restart" onClick={handleRestart} onMouseEnter={handleHover}>
-            RESTART
           </button>
           <button className="pause-btn pause-btn-quit" onClick={handleQuit} onMouseEnter={handleHover}>
             QUIT TO MENU

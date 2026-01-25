@@ -82,17 +82,6 @@ export function DeathScreen({ onReturnToMenu, playTimeSeconds }: DeathScreenProp
     }
   };
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'r' || e.key === 'R') {
-        handleReturnToMenu();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
   const handleReturnToMenu = () => {
     audioManager.playSFX('ui-click');
     reset();
@@ -180,8 +169,6 @@ export function DeathScreen({ onReturnToMenu, playTimeSeconds }: DeathScreenProp
         <button className="death-btn" onClick={handleReturnToMenu} onMouseEnter={handleHover}>
           RETURN TO MENU
         </button>
-
-        <p className="death-hint">Press R to return to menu</p>
       </div>
 
       {showAuthModal && (

@@ -228,7 +228,7 @@
 .editBtn {
   background: none;
   border: none;
-  color: #3742fa;
+  color: #ffa502;
   font-size: 0.75rem;
   cursor: pointer;
   padding: 0.25rem 0.5rem;
@@ -237,7 +237,7 @@
 }
 
 .editBtn:hover {
-  background: rgba(55, 66, 250, 0.1);
+  background: rgba(255, 165, 2, 0.1);
 }
 
 .nameEditor {
