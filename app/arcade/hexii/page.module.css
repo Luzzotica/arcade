@@ -151,6 +151,13 @@
   letter-spacing: 1px;
 }
 
+.menuButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+}
+
 .startBtn {
   font-family: 'Orbitron', 'Courier New', monospace;
   font-size: 18px;
@@ -173,6 +180,31 @@
 }
 
 .startBtn:active {
+  transform: translateY(0);
+}
+
+.optionsBtn {
+  font-family: 'Orbitron', 'Courier New', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 4px;
+  padding: 14px 40px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.optionsBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.9);
+  transform: translateY(-2px);
+}
+
+.optionsBtn:active {
   transform: translateY(0);
 }
 

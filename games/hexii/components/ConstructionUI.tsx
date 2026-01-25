@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useGameStore } from '../store/gameStore';
 import type { HexColor, HexModule } from '../store/gameStore';
 import { HexGrid } from '../game/utils/HexGrid';
 import { HEX_SIZE } from '../game/config';
 import { BASE_STATS_DISPLAY } from '../game/config/SynergyConfig';
+import { audioManager } from '../game/audio/AudioManager';
 import './ConstructionUI.css';
 
 const hexGrid = new HexGrid(HEX_SIZE);
@@ -96,6 +97,15 @@ export function ConstructionUI() {
   
   // If we have choices, show the choice selection UI
   const showChoices = pendingHexChoices && pendingHexChoices.length > 0 && !pendingHex;
+  
+  // Play level-up SFX when the choice screen first appears
+  const prevShowChoices = useRef(false);
+  useEffect(() => {
+    if (showChoices && !prevShowChoices.current) {
+      audioManager.playSFX('levelup');
+    }
+    prevShowChoices.current = !!showChoices;
+  }, [showChoices]);
 
   // Calculate valid attachment points
   const validSlots = useMemo(() => {
@@ -144,17 +154,29 @@ export function ConstructionUI() {
   }, [ship, validSlots]);
 
   const handleSlotClick = (key: string) => {
+    audioManager.playSFX('ui-click');
     setSelectedSlot(key);
   };
 
   const handleConfirm = () => {
     if (selectedSlot && pendingHex) {
+      audioManager.playSFX('ui-click');
       attachHex(selectedSlot, pendingHex);
     }
   };
 
   const handleCancel = () => {
+    audioManager.playSFX('ui-click');
     setConstructionMode(false);
+  };
+  
+  const handleHexChoice = (index: number) => {
+    audioManager.playSFX('ui-click');
+    selectHexChoice(index);
+  };
+  
+  const handleHover = () => {
+    audioManager.playSFX('ui-hover');
   };
 
   // For testing: allow selecting a random hex color if no pending hex
@@ -177,7 +199,8 @@ export function ConstructionUI() {
               <button
                 key={index}
                 className="hex-choice-btn"
-                onClick={() => selectHexChoice(index)}
+                onClick={() => handleHexChoice(index)}
+                onMouseEnter={handleHover}
                 style={{ borderColor: COLOR_VALUES[hex.color] }}
               >
                 <div 
@@ -266,12 +289,14 @@ export function ConstructionUI() {
           <button 
             className="btn btn-cancel"
             onClick={handleCancel}
+            onMouseEnter={handleHover}
           >
             CANCEL
           </button>
           <button 
             className="btn btn-confirm"
             onClick={handleConfirm}
+            onMouseEnter={handleHover}
             disabled={!selectedSlot}
           >
             CONFIRM

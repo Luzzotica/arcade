@@ -9,6 +9,7 @@ import { COLORS, PLAYER_SPEED, TEST_MODE } from '../config';
 import { synergyCalculator, type SynergyStats } from '../utils/SynergyCalculator';
 import { SYNERGY_VALUES } from '../config/SynergyConfig';
 import { getBossShapeFromNumber } from '../data/BossDialogues';
+import { audioManager } from '../audio/AudioManager';
 
 export class MainScene extends Phaser.Scene {
   private player!: Player;
@@ -711,6 +712,9 @@ export class MainScene extends Phaser.Scene {
     const store = useGameStore.getState();
     const stats = this.getStats();
     
+    // Play enemy death SFX (throttled and pitch-modulated for variety)
+    audioManager.playSFX('enemy-death');
+    
     // Add score
     store.addScore(enemy.getScore());
     
@@ -1028,6 +1032,7 @@ export class MainScene extends Phaser.Scene {
           
           store.takeDamage(damage);
           this.player.flashDamage();
+          audioManager.playSFX('player-hurt');
           enemy.setHitCooldown();
           this.lastHitTime = this.time.now;
           
@@ -1093,6 +1098,9 @@ export class MainScene extends Phaser.Scene {
   private playerDeath(): void {
     this.isDead = true;
     this.gameStarted = false;
+    
+    // Play death sound immediately as death animation starts
+    audioManager.playSFX('player-death');
     
     const playerPos = this.player.getPosition();
     this.player.getContainer().setVisible(false);

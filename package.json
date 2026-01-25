@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "generate:soundtrack": "tsx scripts/generate-soundtrack.ts",
+    "generate:sfx": "tsx scripts/generate-sfx.ts",
+    "generate:mesh": "tsx scripts/generate-mesh.ts"
   },
   "dependencies": {
     "next": "^15.1.6",
@@ -16,18 +19,21 @@
     "zustand": "^5.0.10"
   },
   "devDependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.32.0",
     "@eslint/js": "^9.39.1",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.4.23",
+    "dotenv": "^17.2.3",
     "eslint": "^9.39.1",
     "eslint-config-next": "^15.1.6",
     "eslint-plugin-react-hooks": "^7.0.1",
     "globals": "^16.5.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
+    "tsx": "^4.19.2",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4"
   }

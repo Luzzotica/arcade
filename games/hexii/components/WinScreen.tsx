@@ -1,4 +1,5 @@
 import { useGameStore } from '../store/gameStore';
+import { audioManager } from '../game/audio/AudioManager';
 import './WinScreen.css';
 
 interface WinScreenProps {
@@ -14,13 +15,19 @@ export function WinScreen({ onReturnToMenu }: WinScreenProps) {
   const setWinScreen = useGameStore((state) => state.setWinScreen);
 
   const handleContinue = () => {
+    audioManager.playSFX('ui-click');
     // Close win screen and continue playing
     setWinScreen(false);
   };
 
   const handleReturnToMenu = () => {
+    audioManager.playSFX('ui-click');
     reset();
     onReturnToMenu();
+  };
+  
+  const handleHover = () => {
+    audioManager.playSFX('ui-hover');
   };
 
   return (
@@ -67,10 +74,10 @@ export function WinScreen({ onReturnToMenu }: WinScreenProps) {
         </div>
 
         <div className="win-actions">
-          <button className="win-btn win-btn-continue" onClick={handleContinue}>
+          <button className="win-btn win-btn-continue" onClick={handleContinue} onMouseEnter={handleHover}>
             CONTINUE PLAYING
           </button>
-          <button className="win-btn win-btn-menu" onClick={handleReturnToMenu}>
+          <button className="win-btn win-btn-menu" onClick={handleReturnToMenu} onMouseEnter={handleHover}>
             RETURN TO MENU
           </button>
         </div>

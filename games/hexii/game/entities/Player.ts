@@ -5,6 +5,7 @@ import { COLORS, HEX_SIZE, PLAYER_SPEED, PLAYER_ACCELERATION, PLAYER_DRAG } from
 import type { HexModule, HexColor } from '../../store/gameStore';
 import { Projectile, type ProjectileConfig } from './Projectile';
 import { synergyCalculator } from '../utils/SynergyCalculator';
+import { audioManager } from '../audio/AudioManager';
 
 export class Player {
   private scene: Phaser.Scene;
@@ -426,6 +427,9 @@ export class Player {
     },
     angleOffset: number = 0
   ): void {
+    // Play turret fire SFX (throttled and pitch-modulated for variety)
+    audioManager.playSFX('turret-fire');
+    
     const pixel = this.hexGrid.axialToPixel(hexCoord);
     const startX = this.container.x + pixel.x;
     const startY = this.container.y + pixel.y;

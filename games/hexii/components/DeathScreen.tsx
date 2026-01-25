@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
+import { audioManager } from '../game/audio/AudioManager';
 import './DeathScreen.css';
 
 interface DeathScreenProps {
@@ -24,8 +25,13 @@ export function DeathScreen({ onReturnToMenu }: DeathScreenProps) {
   }, []);
 
   const handleReturnToMenu = () => {
+    audioManager.playSFX('ui-click');
     reset();
     onReturnToMenu();
+  };
+  
+  const handleHover = () => {
+    audioManager.playSFX('ui-hover');
   };
 
   return (
@@ -48,7 +54,7 @@ export function DeathScreen({ onReturnToMenu }: DeathScreenProps) {
           </div>
         </div>
 
-        <button className="death-btn" onClick={handleReturnToMenu}>
+        <button className="death-btn" onClick={handleReturnToMenu} onMouseEnter={handleHover}>
           RETURN TO MENU
         </button>
 

@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
+import { audioManager } from '../game/audio/AudioManager';
+import { OptionsMenu } from './OptionsMenu';
 import './PauseMenu.css';
 
 interface PauseMenuProps {
@@ -6,6 +9,7 @@ interface PauseMenuProps {
 }
 
 export function PauseMenu({ onQuit }: PauseMenuProps) {
+  const [showOptions, setShowOptions] = useState(false);
   const closePauseMenu = useGameStore((state) => state.closePauseMenu);
   const reset = useGameStore((state) => state.reset);
   const score = useGameStore((state) => state.score);
@@ -13,10 +17,12 @@ export function PauseMenu({ onQuit }: PauseMenuProps) {
   const level = useGameStore((state) => state.level);
 
   const handleResume = () => {
+    audioManager.playSFX('ui-click');
     closePauseMenu();
   };
 
   const handleRestart = () => {
+    audioManager.playSFX('ui-click');
     // Get current core color before reset
     const ship = useGameStore.getState().ship;
     const coreHex = ship['0,0'];
@@ -28,9 +34,23 @@ export function PauseMenu({ onQuit }: PauseMenuProps) {
   };
 
   const handleQuit = () => {
+    audioManager.playSFX('ui-click');
     reset();
     onQuit();
   };
+  
+  const handleOptions = () => {
+    audioManager.playSFX('ui-click');
+    setShowOptions(true);
+  };
+  
+  const handleHover = () => {
+    audioManager.playSFX('ui-hover');
+  };
+
+  if (showOptions) {
+    return <OptionsMenu onClose={() => setShowOptions(false)} />;
+  }
 
   return (
     <div className="pause-overlay">
@@ -53,13 +73,16 @@ export function PauseMenu({ onQuit }: PauseMenuProps) {
         </div>
 
         <div className="pause-actions">
-          <button className="pause-btn pause-btn-resume" onClick={handleResume}>
+          <button className="pause-btn pause-btn-resume" onClick={handleResume} onMouseEnter={handleHover}>
             RESUME
           </button>
-          <button className="pause-btn pause-btn-restart" onClick={handleRestart}>
+          <button className="pause-btn pause-btn-options" onClick={handleOptions} onMouseEnter={handleHover}>
+            OPTIONS
+          </button>
+          <button className="pause-btn pause-btn-restart" onClick={handleRestart} onMouseEnter={handleHover}>
             RESTART
           </button>
-          <button className="pause-btn pause-btn-quit" onClick={handleQuit}>
+          <button className="pause-btn pause-btn-quit" onClick={handleQuit} onMouseEnter={handleHover}>
             QUIT TO MENU
           </button>
         </div>

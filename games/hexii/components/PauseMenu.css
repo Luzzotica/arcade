@@ -108,6 +108,18 @@
   box-shadow: 0 6px 25px rgba(46, 213, 115, 0.5);
 }
 
+.pause-btn-options {
+  background: linear-gradient(135deg, #3742fa, #5352ed);
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(55, 66, 250, 0.4);
+}
+
+.pause-btn-options:hover {
+  background: linear-gradient(135deg, #4850ff, #6665f0);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(55, 66, 250, 0.5);
+}
+
 .pause-btn-restart {
   background: linear-gradient(135deg, #ffa502, #ff7f50);
   color: #fff;

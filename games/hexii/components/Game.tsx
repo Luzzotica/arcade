@@ -11,6 +11,7 @@ import { DeathScreen } from './DeathScreen';
 import { BossDialogue } from './BossDialogue';
 import { WinScreen } from './WinScreen';
 import { useGameStore } from '../store/gameStore';
+import { audioManager } from '../game/audio/AudioManager';
 import styles from './Game.module.css';
 
 interface GameProps {
@@ -26,6 +27,7 @@ export function Game({ onReturnToMenu }: GameProps) {
   const showBossDialogue = useGameStore((state) => state.showBossDialogue);
   const showWinScreen = useGameStore((state) => state.showWinScreen);
   const togglePauseMenu = useGameStore((state) => state.togglePauseMenu);
+  const bossHp = useGameStore((state) => state.bossHp);
   
   // Get the MainScene from Phaser game
   const getMainScene = useCallback((): MainScene | null => {
@@ -90,6 +92,38 @@ export function Game({ onReturnToMenu }: GameProps) {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [togglePauseMenu]);
+  
+  // Handle boss dialogue music transition (boss appearance)
+  const prevShowBossDialogue = useRef(showBossDialogue);
+  useEffect(() => {
+    if (showBossDialogue && !prevShowBossDialogue.current) {
+      // Boss dialogue started - play boss appear SFX and switch to boss music
+      audioManager.playSFX('boss-appear');
+      audioManager.crossfadeTo('boss');
+    }
+    prevShowBossDialogue.current = showBossDialogue;
+  }, [showBossDialogue]);
+  
+  // Handle boss death (when bossHp goes from a value to null)
+  const prevBossHp = useRef(bossHp);
+  useEffect(() => {
+    // Boss died: was positive, now null
+    if (prevBossHp.current !== null && prevBossHp.current > 0 && bossHp === null && !isDead) {
+      audioManager.playSFX('boss-death');
+      audioManager.crossfadeTo('gameplay');
+    }
+    prevBossHp.current = bossHp;
+  }, [bossHp, isDead]);
+  
+  // Handle player death music transition
+  const prevIsDead = useRef(isDead);
+  useEffect(() => {
+    if (isDead && !prevIsDead.current) {
+      // Player just died - switch to defeat music (death SFX is played in MainScene during animation)
+      audioManager.crossfadeTo('defeat');
+    }
+    prevIsDead.current = isDead;
+  }, [isDead]);
 
   return (
     <div className={styles.gameWrapper}>

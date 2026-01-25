@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { getBossName, getRandomDialogue, type BossShape } from '../game/data/BossDialogues';
+import { audioManager } from '../game/audio/AudioManager';
 import './BossDialogue.css';
 
 // Shape symbols for each boss
@@ -71,15 +72,21 @@ export function BossDialogue({ onPanToPlayer, onEngage }: BossDialogueProps) {
   
   // Handle continue button - pan back to player
   const handleContinue = useCallback(() => {
+    audioManager.playSFX('ui-click');
     setBossDialoguePhase('pan_to_player');
     onPanToPlayer?.();
   }, [setBossDialoguePhase, onPanToPlayer]);
   
   // Handle engage button - start the fight
   const handleEngage = useCallback(() => {
+    audioManager.playSFX('ui-click');
     setBossDialoguePhase(null);
     onEngage?.();
   }, [setBossDialoguePhase, onEngage]);
+  
+  const handleHover = useCallback(() => {
+    audioManager.playSFX('ui-hover');
+  }, []);
   
   // Skip to end of current text on click
   const handleSkip = useCallback(() => {
@@ -147,7 +154,7 @@ export function BossDialogue({ onPanToPlayer, onEngage }: BossDialogueProps) {
               <span className="dialogue-hint">Click to skip</span>
             )}
             {bossTextComplete && (
-              <button className="dialogue-btn" onClick={handleContinue}>
+              <button className="dialogue-btn" onClick={handleContinue} onMouseEnter={handleHover}>
                 CONTINUE
               </button>
             )}
@@ -177,7 +184,7 @@ export function BossDialogue({ onPanToPlayer, onEngage }: BossDialogueProps) {
               <span className="dialogue-hint">Click to skip</span>
             )}
             {playerTextComplete && (
-              <button className="dialogue-btn engage-btn" onClick={handleEngage}>
+              <button className="dialogue-btn engage-btn" onClick={handleEngage} onMouseEnter={handleHover}>
                 ENGAGE
               </button>
             )}

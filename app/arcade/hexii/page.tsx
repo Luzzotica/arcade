@@ -5,6 +5,8 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useGameStore } from '@/games/hexii/store/gameStore';
 import type { HexColor } from '@/games/hexii/store/gameStore';
+import { audioManager } from '@/games/hexii/game/audio/AudioManager';
+import { OptionsMenu } from '@/games/hexii/components/OptionsMenu';
 import styles from './page.module.css';
 
 // Dynamically import Game component to prevent SSR issues with Phaser
@@ -24,6 +26,7 @@ interface HexPosition {
 function MainMenu({ onStart }: { onStart: (color: HexColor) => void }) {
   const [selectedColor, setSelectedColor] = useState<HexColor>('RED');
   const [hexPositions, setHexPositions] = useState<HexPosition[]>([]);
+  const [showOptions, setShowOptions] = useState(false);
 
   useEffect(() => {
     // Generate random positions only on client side
@@ -33,7 +36,30 @@ function MainMenu({ onStart }: { onStart: (color: HexColor) => void }) {
         top: Math.random() * 100,
       }))
     );
+    
+    // Start title music
+    audioManager.playMusic('title');
   }, []);
+  
+  const handleColorSelect = (color: HexColor) => {
+    audioManager.playSFX('ui-click');
+    setSelectedColor(color);
+  };
+  
+  const handleStartGame = () => {
+    audioManager.playSFX('ui-click');
+    audioManager.crossfadeTo('gameplay');
+    onStart(selectedColor);
+  };
+  
+  const handleOptions = () => {
+    audioManager.playSFX('ui-click');
+    setShowOptions(true);
+  };
+  
+  const handleHover = () => {
+    audioManager.playSFX('ui-hover');
+  };
 
   const colors: { color: HexColor; name: string; desc: string }[] = [
     { color: 'RED', name: 'Damage', desc: '+5% Global Damage' },
@@ -62,7 +88,8 @@ function MainMenu({ onStart }: { onStart: (color: HexColor) => void }) {
               <button
                 key={color}
                 className={`${styles.colorOption} ${styles[color.toLowerCase()]} ${selectedColor === color ? styles.selected : ''}`}
-                onClick={() => setSelectedColor(color)}
+                onClick={() => handleColorSelect(color)}
+                onMouseEnter={handleHover}
               >
                 <div className={styles.colorHex}>⬢</div>
                 <div className={styles.colorName}>{name}</div>
@@ -72,9 +99,14 @@ function MainMenu({ onStart }: { onStart: (color: HexColor) => void }) {
           </div>
         </div>
 
-        <button className={styles.startBtn} onClick={() => onStart(selectedColor)}>
-          START GAME
-        </button>
+        <div className={styles.menuButtons}>
+          <button className={styles.startBtn} onClick={handleStartGame} onMouseEnter={handleHover}>
+            START GAME
+          </button>
+          <button className={styles.optionsBtn} onClick={handleOptions} onMouseEnter={handleHover}>
+            OPTIONS
+          </button>
+        </div>
 
         <div className={styles.controlsHint}>
           <p><strong>WASD</strong> to move • <strong>MOUSE</strong> to aim</p>
@@ -96,6 +128,8 @@ function MainMenu({ onStart }: { onStart: (color: HexColor) => void }) {
           </div>
         ))}
       </div>
+      
+      {showOptions && <OptionsMenu onClose={() => setShowOptions(false)} />}
     </div>
   );
 }
@@ -129,15 +163,18 @@ export default function HexiiPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [gameStarted, setConstructionMode]);
 
+  const handleReturnToMenu = () => {
+    audioManager.crossfadeTo('title');
+    useGameStore.getState().reset();
+    setGameStarted(false);
+  };
+
   return (
     <div className={styles.app}>
       {!gameStarted ? (
         <MainMenu onStart={handleStart} />
       ) : (
-        <Game onReturnToMenu={() => {
-          useGameStore.getState().reset();
-          setGameStarted(false);
-        }} />
+        <Game onReturnToMenu={handleReturnToMenu} />
       )}
     </div>
   );

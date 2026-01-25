@@ -45,4 +45,4 @@ export const PLAYER_ACCELERATION = 800;
 export const PLAYER_DRAG = 400;
 
 // Test mode: bosses spawn every wave with 1/10 health
-export const TEST_MODE = true;
+export const TEST_MODE = false;
