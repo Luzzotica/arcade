@@ -11,7 +11,7 @@
 -- This is optional - Supabase Presence can work without a table
 -- But having one allows us to query historical presence data
 CREATE TABLE IF NOT EXISTS public.presence_log (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
   game_id TEXT,
   status TEXT NOT NULL DEFAULT 'online',

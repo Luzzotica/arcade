@@ -2,8 +2,8 @@
 -- HEXII ARCADE - Initial Database Schema
 -- =============================================
 
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- Note: Using gen_random_uuid() which is built-in to PostgreSQL 13+
+-- No extension needed
 
 -- =============================================
 -- PROFILES TABLE
@@ -74,7 +74,7 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
 -- Stores individual game scores for leaderboards
 -- =============================================
 CREATE TABLE IF NOT EXISTS public.high_scores (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
   game_id TEXT NOT NULL,
   score INTEGER NOT NULL,
@@ -105,7 +105,7 @@ CREATE POLICY "High scores are viewable by everyone"
 -- Tracks analytics: play counts, session data
 -- =============================================
 CREATE TABLE IF NOT EXISTS public.game_sessions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   game_id TEXT NOT NULL,
   started_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
@@ -142,7 +142,7 @@ CREATE POLICY "Game sessions are viewable for analytics"
 -- Tracks player purchases
 -- =============================================
 CREATE TABLE IF NOT EXISTS public.purchases (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
   product_id TEXT NOT NULL,
   amount_cents INTEGER NOT NULL,

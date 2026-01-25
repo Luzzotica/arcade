@@ -44,7 +44,9 @@ export async function GET(
 
   data?.forEach((entry) => {
     const userId = entry.user_id;
-    const profile = entry.profiles as { display_name: string | null; is_public: boolean };
+    // profiles comes as an array from the join, take the first one
+    const profiles = entry.profiles as { display_name: string | null; is_public: boolean }[] | null;
+    const profile = Array.isArray(profiles) ? profiles[0] : profiles;
     const displayName = profile?.display_name || 'Anonymous';
     
     if (!userBests.has(userId)) {
