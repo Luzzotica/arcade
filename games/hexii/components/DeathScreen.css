@@ -113,3 +113,118 @@
   color: rgba(255, 255, 255, 0.4);
   margin: 0;
 }
+
+.new-high-score {
+  font-family: 'Orbitron', 'Courier New', monospace;
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffd700;
+  text-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+  margin-bottom: 16px;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.05); }
+}
+
+.personal-best {
+  font-family: 'Orbitron', 'Courier New', monospace;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 20px;
+}
+
+.personal-best .rank {
+  color: #3742fa;
+}
+
+.sign-in-btn {
+  background: linear-gradient(135deg, #3742fa, #5a67fa) !important;
+  box-shadow: 0 4px 20px rgba(55, 66, 250, 0.4) !important;
+}
+
+.sign-in-btn:hover {
+  background: linear-gradient(135deg, #5a67fa, #7c86fa) !important;
+  box-shadow: 0 6px 25px rgba(55, 66, 250, 0.5) !important;
+}
+
+.submit-btn {
+  background: linear-gradient(135deg, #2ed573, #7bed9f) !important;
+  box-shadow: 0 4px 20px rgba(46, 213, 115, 0.4) !important;
+}
+
+.submit-btn:hover {
+  background: linear-gradient(135deg, #7bed9f, #2ed573) !important;
+  box-shadow: 0 6px 25px rgba(46, 213, 115, 0.5) !important;
+}
+
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.score-saved {
+  font-family: 'Orbitron', 'Courier New', monospace;
+  font-size: 14px;
+  color: #2ed573;
+  margin-bottom: 20px;
+}
+
+.mini-leaderboard {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  border: 1px solid rgba(55, 66, 250, 0.2);
+}
+
+.mini-leaderboard h3 {
+  font-family: 'Orbitron', 'Courier New', monospace;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin: 0 0 12px 0;
+}
+
+.leaderboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.leaderboard-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  font-family: 'Orbitron', 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.leaderboard-entry.current-user {
+  background: rgba(55, 66, 250, 0.2);
+  border: 1px solid rgba(55, 66, 250, 0.4);
+}
+
+.lb-rank {
+  color: rgba(255, 255, 255, 0.5);
+  width: 30px;
+}
+
+.lb-name {
+  flex: 1;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb-score {
+  color: #3742fa;
+  font-weight: 700;
+}

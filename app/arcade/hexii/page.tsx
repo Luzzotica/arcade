@@ -7,6 +7,8 @@ import { useGameStore } from '@/games/hexii/store/gameStore';
 import type { HexColor } from '@/games/hexii/store/gameStore';
 import { audioManager } from '@/games/hexii/game/audio/AudioManager';
 import { OptionsMenu } from '@/games/hexii/components/OptionsMenu';
+import { UserMenu } from '@/components/auth/UserMenu';
+import { usePresence } from '@/lib/supabase/hooks';
 import styles from './page.module.css';
 
 // Dynamically import Game component to prevent SSR issues with Phaser
@@ -27,6 +29,7 @@ function MainMenu({ onStart }: { onStart: (color: HexColor) => void }) {
   const [selectedColor, setSelectedColor] = useState<HexColor>('RED');
   const [hexPositions, setHexPositions] = useState<HexPosition[]>([]);
   const [showOptions, setShowOptions] = useState(false);
+  const { currentGamePlayers } = usePresence('hexii');
 
   useEffect(() => {
     // Generate random positions only on client side
@@ -70,9 +73,20 @@ function MainMenu({ onStart }: { onStart: (color: HexColor) => void }) {
 
   return (
     <div className={styles.mainMenu}>
-      <Link href="/arcade" className={styles.backLink}>
-        ← Back to Arcade
-      </Link>
+      <div className={styles.menuHeader}>
+        <Link href="/arcade" className={styles.backLink}>
+          ← Back to Arcade
+        </Link>
+        <div className={styles.menuHeaderRight}>
+          {currentGamePlayers > 0 && (
+            <div className={styles.playersOnline}>
+              <span className={styles.onlineDot} />
+              {currentGamePlayers} playing
+            </div>
+          )}
+          <UserMenu />
+        </div>
+      </div>
       <div className={styles.menuContent}>
         <h1 className={styles.gameTitle}>
           <span className={styles.titleHex}>⬡</span>

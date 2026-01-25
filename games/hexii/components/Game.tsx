@@ -12,6 +12,7 @@ import { BossDialogue } from './BossDialogue';
 import { WinScreen } from './WinScreen';
 import { useGameStore } from '../store/gameStore';
 import { audioManager } from '../game/audio/AudioManager';
+import { useGameSession } from '@/lib/supabase/hooks';
 import styles from './Game.module.css';
 
 interface GameProps {
@@ -28,6 +29,13 @@ export function Game({ onReturnToMenu }: GameProps) {
   const showWinScreen = useGameStore((state) => state.showWinScreen);
   const togglePauseMenu = useGameStore((state) => state.togglePauseMenu);
   const bossHp = useGameStore((state) => state.bossHp);
+  const score = useGameStore((state) => state.score);
+  const wave = useGameStore((state) => state.wave);
+  const level = useGameStore((state) => state.level);
+  
+  // Analytics tracking
+  const { startSession, endSession, getPlayTimeSeconds } = useGameSession('hexii');
+  const sessionStartedRef = useRef(false);
   
   // Get the MainScene from Phaser game
   const getMainScene = useCallback((): MainScene | null => {
@@ -49,6 +57,12 @@ export function Game({ onReturnToMenu }: GameProps) {
 
   useEffect(() => {
     if (!containerRef.current || gameRef.current) return;
+
+    // Start analytics session
+    if (!sessionStartedRef.current) {
+      sessionStartedRef.current = true;
+      startSession();
+    }
 
     // Create Phaser game instance
     gameRef.current = new Phaser.Game({
@@ -79,7 +93,14 @@ export function Game({ onReturnToMenu }: GameProps) {
         gameRef.current = null;
       }
     };
-  }, [onReturnToMenu]);
+  }, [onReturnToMenu, startSession]);
+  
+  // End session when player dies
+  useEffect(() => {
+    if (isDead && sessionStartedRef.current) {
+      endSession(score, wave, level);
+    }
+  }, [isDead, score, wave, level, endSession]);
 
   // Handle ESC key for pause menu
   useEffect(() => {
@@ -140,7 +161,7 @@ export function Game({ onReturnToMenu }: GameProps) {
         />
       )}
       {showWinScreen && <WinScreen onReturnToMenu={onReturnToMenu} />}
-      {isDead && <DeathScreen onReturnToMenu={onReturnToMenu} />}
+      {isDead && <DeathScreen onReturnToMenu={onReturnToMenu} playTimeSeconds={getPlayTimeSeconds()} />}
     </div>
   );
 }

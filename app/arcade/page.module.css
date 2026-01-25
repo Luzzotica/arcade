@@ -6,8 +6,46 @@
     radial-gradient(ellipse at 30% 20%, rgba(55, 66, 250, 0.15) 0%, transparent 50%),
     radial-gradient(ellipse at 70% 80%, rgba(255, 71, 87, 0.1) 0%, transparent 50%),
     linear-gradient(180deg, #0a0a14 0%, #1a1a2e 50%, #0a0a14 100%);
-  padding: 40px 20px;
+  padding: 20px 20px 40px;
   overflow: hidden;
+}
+
+.header {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto 40px;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.onlineIndicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.onlineDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2ed573;
+  box-shadow: 0 0 8px #2ed573;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 .content {
@@ -23,7 +61,6 @@
   text-decoration: none;
   font-size: 14px;
   letter-spacing: 2px;
-  margin-bottom: 40px;
   transition: color 0.3s ease;
 }
 
@@ -103,12 +140,45 @@
   flex-grow: 1;
 }
 
+.cardStats {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  margin-bottom: 16px;
+  min-height: 40px;
+}
+
+.playingNow {
+  font-size: 13px;
+  color: #2ed573;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.statDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2ed573;
+  box-shadow: 0 0 6px #2ed573;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.totalPlays {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
 .playButton {
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 2px;
   color: rgba(255, 255, 255, 0.8);
-  margin-top: auto;
+  transition: all 0.2s ease;
 }
 
 .gameCard:hover .playButton {

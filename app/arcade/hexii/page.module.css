@@ -27,12 +27,49 @@
   overflow: hidden;
 }
 
-.backLink {
-  font-family: 'Orbitron', 'Courier New', monospace;
+.menuHeader {
   position: absolute;
   top: 20px;
   left: 20px;
+  right: 20px;
   z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.menuHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.playersOnline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Orbitron', 'Courier New', monospace;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 1px;
+}
+
+.onlineDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2ed573;
+  box-shadow: 0 0 8px #2ed573;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.backLink {
+  font-family: 'Orbitron', 'Courier New', monospace;
   display: inline-block;
   color: rgba(255, 255, 255, 0.6);
   text-decoration: none;
