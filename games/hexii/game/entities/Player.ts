@@ -6,6 +6,8 @@ import type { HexModule, HexColor } from '../../store/gameStore';
 import { Projectile, type ProjectileConfig } from './Projectile';
 import { synergyCalculator } from '../utils/SynergyCalculator';
 import { audioManager } from '../audio/AudioManager';
+import { isMobileDevice, requestDeviceOrientationPermission } from '../utils/MobileDetector';
+import type { Enemy } from './Enemy';
 
 export class Player {
   private scene: Phaser.Scene;
@@ -35,7 +37,7 @@ export class Player {
   private readonly BASE_FIRE_RATE = 1000; // ms between shots (1.0s as per design doc)
   private readonly PROJECTILE_SPEED = 500;
   private readonly PROJECTILE_DAMAGE = 10;
-  private readonly PROJECTILE_SIZE = 2; // Doubled from 1
+  private readonly PROJECTILE_SIZE = 4; // Doubled from 2
   private readonly PROJECTILE_LIFETIME = 2000; // ms
   
   // Movement synergy tracking
@@ -43,6 +45,12 @@ export class Player {
   private dashCooldown: number = 0;
   private lastDashDirection: { x: number; y: number } | null = null;
   private dashTimeWindow: number = 300; // ms window for double-tap
+
+  // Mobile support
+  private isMobile: boolean = false;
+  private deviceOrientation: { beta: number; gamma: number } | null = null;
+  private getEnemiesCallback: (() => Enemy[]) | null = null;
+  private orientationPermissionGranted: boolean = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene;
@@ -74,6 +82,76 @@ export class Player {
     
     // Shooting is always active (no click needed)
     this.isShooting = true;
+
+    // Check if mobile and set up device orientation
+    this.isMobile = isMobileDevice();
+    if (this.isMobile) {
+      this.setupMobileControls();
+    }
+  }
+
+  /**
+   * Set callback to get enemies list (called from MainScene)
+   */
+  setEnemiesCallback(callback: () => Enemy[]): void {
+    this.getEnemiesCallback = callback;
+  }
+
+  /**
+   * Setup mobile controls (accelerometer)
+   */
+  private async setupMobileControls(): Promise<void> {
+    // Request permission for device orientation (iOS 13+)
+    this.orientationPermissionGranted = await requestDeviceOrientationPermission();
+    
+    if (this.orientationPermissionGranted || typeof DeviceOrientationEvent !== 'undefined') {
+      window.addEventListener('deviceorientation', this.handleDeviceOrientation.bind(this));
+    }
+  }
+
+  /**
+   * Handle device orientation events
+   */
+  private handleDeviceOrientation(event: DeviceOrientationEvent): void {
+    if (event.beta !== null && event.gamma !== null) {
+      this.deviceOrientation = {
+        beta: event.beta, // -180 to 180, tilt forward/backward
+        gamma: event.gamma, // -90 to 90, tilt left/right
+      };
+    }
+  }
+
+  /**
+   * Find the closest enemy to the player
+   */
+  private findClosestEnemy(): { x: number; y: number } | null {
+    if (!this.getEnemiesCallback) return null;
+    
+    const enemies = this.getEnemiesCallback();
+    if (enemies.length === 0) return null;
+    
+    const playerPos = this.getPosition();
+    let closestEnemy: Enemy | null = null;
+    let closestDistance = Infinity;
+    
+    for (const enemy of enemies) {
+      if (!enemy.active) continue;
+      
+      const dx = enemy.x - playerPos.x;
+      const dy = enemy.y - playerPos.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestEnemy = enemy;
+      }
+    }
+    
+    if (closestEnemy) {
+      return { x: closestEnemy.x, y: closestEnemy.y };
+    }
+    
+    return null;
   }
 
   /**
@@ -275,29 +353,40 @@ export class Player {
     const currentMaxSpeed = PLAYER_SPEED * speedMultiplier;
     this.body.setMaxVelocity(currentMaxSpeed, currentMaxSpeed);
     
-    // Handle WASD movement
+    // Handle movement (WASD or accelerometer)
     let accelX = 0;
     let accelY = 0;
     
-    if (this.cursors.left.isDown) {
-      accelX = -1;
-    } else if (this.cursors.right.isDown) {
-      accelX = 1;
-    }
-    
-    if (this.cursors.up.isDown) {
-      accelY = -1;
-    } else if (this.cursors.down.isDown) {
-      accelY = 1;
-    }
-    
-    // Check for dash (YELLOW + YELLOW)
-    const dash = this.checkDash(delta);
-    if (dash) {
-      this.body.setVelocity(
-        this.body.velocity.x + dash.dashX,
-        this.body.velocity.y + dash.dashY
-      );
+    if (this.isMobile && this.deviceOrientation) {
+      // Use accelerometer for movement on mobile
+      // gamma: left/right tilt (-90 to 90)
+      // beta: forward/backward tilt (-180 to 180)
+      // Normalize to -1 to 1 range
+      const sensitivity = 0.02; // Adjust sensitivity
+      accelX = Math.max(-1, Math.min(1, this.deviceOrientation.gamma * sensitivity));
+      accelY = Math.max(-1, Math.min(1, (this.deviceOrientation.beta - 90) * sensitivity));
+    } else {
+      // Use WASD controls
+      if (this.cursors.left.isDown) {
+        accelX = -1;
+      } else if (this.cursors.right.isDown) {
+        accelX = 1;
+      }
+      
+      if (this.cursors.up.isDown) {
+        accelY = -1;
+      } else if (this.cursors.down.isDown) {
+        accelY = 1;
+      }
+      
+      // Check for dash (YELLOW + YELLOW) - only on desktop
+      const dash = this.checkDash(delta);
+      if (dash) {
+        this.body.setVelocity(
+          this.body.velocity.x + dash.dashX,
+          this.body.velocity.y + dash.dashY
+        );
+      }
     }
     
     // Normalize diagonal movement so it's not faster
@@ -309,7 +398,7 @@ export class Player {
     
     this.body.setAcceleration(accelX, accelY);
     
-    // Always shoot towards mouse
+    // Shoot towards mouse (desktop) or closest enemy (mobile)
     this.updateShooting(time, delta);
     
     // Update cooldowns
@@ -327,8 +416,23 @@ export class Player {
    * Update shooting logic
    */
   private updateShooting(_time: number, _delta: number): void {
-    const mouseWorldX = this.mousePointer.worldX;
-    const mouseWorldY = this.mousePointer.worldY;
+    // On mobile, target closest enemy; on desktop, use mouse
+    let targetX: number;
+    let targetY: number;
+    
+    if (this.isMobile) {
+      const closestEnemy = this.findClosestEnemy();
+      if (closestEnemy) {
+        targetX = closestEnemy.x;
+        targetY = closestEnemy.y;
+      } else {
+        // No enemies, don't shoot
+        return;
+      }
+    } else {
+      targetX = this.mousePointer.worldX;
+      targetY = this.mousePointer.worldY;
+    }
     
     // Find all Red hexes and Core (Core always shoots)
     const shootingHexes: Array<{ key: string; hex: HexModule; coord: HexCoord }> = [];
@@ -356,7 +460,7 @@ export class Player {
             ? (i - (projectileCount - 1) / 2) * 0.1 // Spread for multiple projectiles
             : 0;
           
-          this.fireProjectile(coord, mouseWorldX, mouseWorldY, bonuses, angleOffset);
+          this.fireProjectile(coord, targetX, targetY, bonuses, angleOffset);
         }
         
         // Set cooldown (reduced if Yellow adjacency)
@@ -372,8 +476,8 @@ export class Player {
           
           this.scene.tweens.add({
             targets: sprite,
-            x: originalX - Math.cos(Math.atan2(mouseWorldY - (this.container.y + originalY), mouseWorldX - (this.container.x + originalX))) * 3,
-            y: originalY - Math.sin(Math.atan2(mouseWorldY - (this.container.y + originalY), mouseWorldX - (this.container.x + originalX))) * 3,
+            x: originalX - Math.cos(Math.atan2(targetY - (this.container.y + originalY), targetX - (this.container.x + originalX))) * 3,
+            y: originalY - Math.sin(Math.atan2(targetY - (this.container.y + originalY), targetX - (this.container.x + originalX))) * 3,
             duration: 50,
             yoyo: true,
             ease: 'Power2',

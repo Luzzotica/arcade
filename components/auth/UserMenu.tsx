@@ -10,7 +10,6 @@ export function UserMenu() {
   const { user, loading, signOut } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [isPublic, setIsPublic] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [editingName, setEditingName] = useState(false);
   const [newDisplayName, setNewDisplayName] = useState('');
@@ -24,35 +23,17 @@ export function UserMenu() {
     const fetchProfile = async () => {
       const { data } = await supabase
         .from('profiles')
-        .select('is_public, display_name')
+        .select('display_name')
         .eq('id', user.id)
         .single();
       
       if (data) {
-        setIsPublic(data.is_public);
         setDisplayName(data.display_name || '');
       }
     };
     
     fetchProfile();
   }, [user, supabase]);
-
-  const togglePublicProfile = async () => {
-    if (!user || updating) return;
-    
-    setUpdating(true);
-    const newValue = !isPublic;
-    
-    const { error } = await supabase
-      .from('profiles')
-      .update({ is_public: newValue })
-      .eq('id', user.id);
-    
-    if (!error) {
-      setIsPublic(newValue);
-    }
-    setUpdating(false);
-  };
 
   const startEditingName = () => {
     setNewDisplayName(displayName);
@@ -186,22 +167,6 @@ export function UserMenu() {
               )}
             </div>
             
-            <div className={styles.dropdownDivider} />
-            <button
-              className={`${styles.dropdownItem} ${styles.toggleItem}`}
-              onClick={togglePublicProfile}
-              disabled={updating}
-            >
-              <div className={`${styles.toggle} ${isPublic ? styles.toggleOn : ''}`}>
-                <div className={styles.toggleKnob} />
-              </div>
-              <div className={styles.toggleLabel}>
-                <span>Public Profile</span>
-                <span className={styles.toggleHint}>
-                  {isPublic ? 'Visible on leaderboards' : 'Hidden from leaderboards'}
-                </span>
-              </div>
-            </button>
             <div className={styles.dropdownDivider} />
             <button
               className={styles.dropdownItem}

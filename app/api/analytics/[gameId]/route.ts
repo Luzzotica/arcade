@@ -51,18 +51,6 @@ export async function GET(
   
   const uniquePlayers = new Set(uniquePlayerData?.map(d => d.user_id)).size;
 
-  // Get public players count
-  const { data: publicPlayerData } = await supabase
-    .from('high_scores')
-    .select(`
-      user_id,
-      profiles!inner (is_public)
-    `)
-    .eq('game_id', gameId)
-    .eq('profiles.is_public', true);
-  
-  const publicPlayers = new Set(publicPlayerData?.map(d => d.user_id)).size;
-
   return NextResponse.json({
     game_id: gameId,
     total_sessions: totalSessions,
@@ -71,6 +59,6 @@ export async function GET(
     avg_play_time_seconds: totalSessions > 0 ? totalPlayTime / totalSessions : 0,
     avg_final_score: sessionsWithScore > 0 ? totalScore / sessionsWithScore : 0,
     unique_players: uniquePlayers,
-    public_leaderboard_players: publicPlayers,
+    public_leaderboard_players: uniquePlayers,
   });
 }

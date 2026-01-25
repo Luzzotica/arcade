@@ -30,25 +30,24 @@ export async function GET(
   // Get user's profile
   const { data: profile } = await adminClient
     .from('profiles')
-    .select('is_public, display_name')
+    .select('display_name')
     .eq('id', user.id)
     .single();
 
   let rank = null;
-  if (profile?.is_public && personalBest) {
-    // Get all public users' best scores and count how many are higher
+  if (personalBest) {
+    // Get all users' best scores and count how many are higher
     const { data: allScores } = await adminClient
       .from('high_scores')
       .select(`
         user_id,
         score,
-        profiles!inner (is_public)
+        profiles!inner (display_name)
       `)
-      .eq('game_id', gameId)
-      .eq('profiles.is_public', true);
+      .eq('game_id', gameId);
 
     if (allScores) {
-      // Get best score per public user
+      // Get best score per user
       const userBests = new Map<string, number>();
       allScores.forEach((s) => {
         const current = userBests.get(s.user_id) || 0;
@@ -80,7 +79,6 @@ export async function GET(
       achieved_at: personalBest.created_at,
     } : null,
     rank,
-    is_public: profile?.is_public || false,
     display_name: profile?.display_name || null,
   });
 }

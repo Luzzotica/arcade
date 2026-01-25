@@ -21,7 +21,7 @@ interface PersonalStats {
     achieved_at: string;
   } | null;
   rank: number | null;
-  is_public: boolean;
+  display_name: string | null;
 }
 
 export function useHighScores(gameId: string) {

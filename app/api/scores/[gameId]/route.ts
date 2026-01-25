@@ -11,7 +11,7 @@ export async function GET(
 
   const supabase = createAdminClient();
 
-  // Get best scores per user for this game, joining with public profiles only
+  // Get best scores per user for this game, joining with profiles
   const { data, error } = await supabase
     .from('high_scores')
     .select(`
@@ -19,16 +19,18 @@ export async function GET(
       score,
       metadata,
       profiles!inner (
-        display_name,
-        is_public
+        display_name
       )
     `)
     .eq('game_id', gameId)
-    .eq('profiles.is_public', true)
     .order('score', { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (!data || data.length === 0) {
+    return NextResponse.json([]);
   }
 
   // Aggregate to get best score per user
@@ -40,11 +42,12 @@ export async function GET(
     total_plays: number;
   }>();
 
-  data?.forEach((entry) => {
+  data.forEach((entry) => {
     const userId = entry.user_id;
     // profiles comes as an array from the join, take the first one
-    const profiles = entry.profiles as { display_name: string | null; is_public: boolean }[] | null;
+    const profiles = entry.profiles as { display_name: string | null }[] | null;
     const profile = Array.isArray(profiles) ? profiles[0] : profiles;
+    
     const displayName = profile?.display_name || 'Anonymous';
     
     // Extract wave and level from metadata

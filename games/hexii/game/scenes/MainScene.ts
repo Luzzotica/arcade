@@ -89,6 +89,9 @@ export class MainScene extends Phaser.Scene {
     this.physics.world.setBounds(-10000, -10000, 20000, 20000);
     this.player = new Player(this, 0, 0);
     
+    // Set up enemies callback for mobile auto-shooting
+    this.player.setEnemiesCallback(() => this.enemies);
+    
     this.cameras.main.setBounds(-10000, -10000, 20000, 20000);
     this.cameras.main.startFollow(this.player.getContainer(), true, 0.1, 0.1);
     this.cameras.main.setDeadzone(0, 0);

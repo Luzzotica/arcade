@@ -165,11 +165,6 @@ export function ConstructionUI() {
     }
   };
 
-  const handleCancel = () => {
-    audioManager.playSFX('ui-click');
-    setConstructionMode(false);
-  };
-  
   const handleHexChoice = (index: number) => {
     audioManager.playSFX('ui-click');
     selectHexChoice(index);
@@ -211,7 +206,6 @@ export function ConstructionUI() {
                 </div>
                 <div className="hex-choice-name">{hex.color}</div>
                 <div className="hex-choice-stat">{COLOR_DESCRIPTIONS[hex.color].stat}</div>
-                <div className="hex-choice-ability">{COLOR_DESCRIPTIONS[hex.color].ability}</div>
               </button>
             ))}
           </div>
@@ -280,19 +274,11 @@ export function ConstructionUI() {
           </div>
           <div className="hex-stats">
             <div className="hex-stat">{COLOR_DESCRIPTIONS[testHex.color].stat}</div>
-            <div className="hex-ability">{COLOR_DESCRIPTIONS[testHex.color].ability}</div>
           </div>
         </div>
 
         {/* Action Buttons */}
         <div className="construction-actions">
-          <button 
-            className="btn btn-cancel"
-            onClick={handleCancel}
-            onMouseEnter={handleHover}
-          >
-            CANCEL
-          </button>
           <button 
             className="btn btn-confirm"
             onClick={handleConfirm}

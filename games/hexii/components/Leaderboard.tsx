@@ -29,28 +29,32 @@ export function Leaderboard({ refreshKey }: LeaderboardProps) {
     const fetchData = async () => {
       setLoading(true);
       
-      // Fetch leaderboard
-      const lb = await getLeaderboard(10);
-      setLeaderboard(lb);
+      try {
+        // Fetch leaderboard
+        const lb = await getLeaderboard(10);
+        setLeaderboard(lb);
 
-      // Get current user's display name for highlighting
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('display_name')
-          .eq('id', user.id)
-          .single();
-        
-        setCurrentUserDisplayName(profile?.display_name || null);
-      } else {
-        setCurrentUserDisplayName(null);
+        // Get current user's display name for highlighting
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('display_name')
+            .eq('id', user.id)
+            .single();
+          
+          setCurrentUserDisplayName(profile?.display_name || null);
+        } else {
+          setCurrentUserDisplayName(null);
+        }
+      } catch (error) {
+        setLeaderboard([]);
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
     };
 
     fetchData();
-  }, [user, refreshKey]);
+  }, [user, refreshKey, getLeaderboard, supabase]);
 
   if (loading) {
     return (
