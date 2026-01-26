@@ -430,6 +430,8 @@ export class Enemy extends Phaser.GameObjects.Graphics {
    * Take damage and return true if destroyed
    */
   takeDamage(amount: number): boolean {
+    if (!this.scene) return true; // Already destroyed
+    
     // Apply corrosion bonus damage
     let finalDamage = amount;
     if (this.isCorrosion) {
@@ -508,6 +510,7 @@ export class Enemy extends Phaser.GameObjects.Graphics {
    * Apply stun effect (only once per field entry)
    */
   applyStun(duration: number): void {
+    if (!this.scene) return; // Enemy was destroyed
     if (this.hasBeenStunned) return;
     
     this.isStunned = true;
