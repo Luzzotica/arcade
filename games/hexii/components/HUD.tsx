@@ -1,6 +1,5 @@
 import { useGameStore } from '../store/gameStore';
 import { formatHealthForDisplay } from '../game/config/SynergyConfig';
-import './HUD.css';
 
 export function HUD() {
   const hp = useGameStore((state) => state.hp);
@@ -19,53 +18,59 @@ export function HUD() {
 
   return (
     <>
-      <div className="hud">
-        <div className="hud-left">
-          <div className="stat-bar hp-bar">
-            <div className="bar-label">HP</div>
-            <div className="bar-container">
+      <div className="absolute top-0 left-0 right-0 flex justify-between p-3 md:p-5 pointer-events-none z-10">
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 md:gap-2.5">
+            <div className="font-orbitron text-[10px] md:text-xs font-bold w-[50px] md:w-[60px] text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">HP</div>
+            <div className="relative w-[150px] md:w-[200px] h-4 md:h-5 bg-black/60 border-2 border-white/30 rounded overflow-hidden">
               <div 
-                className="bar-fill hp-fill" 
+                className="absolute top-0 left-0 h-full bg-gradient-to-r from-[#ff4757] to-[#ff6b81] shadow-[0_0_15px_rgba(255,71,87,0.6)] transition-[width] duration-200"
                 style={{ width: `${hpPercent}%` }}
               />
-              <div className="bar-text">{formatHealthForDisplay(hp, maxHp)}</div>
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 font-orbitron text-[9px] md:text-[11px] font-semibold text-white drop-shadow-[1px_1px_2px_rgba(0,0,0,0.8)]">
+                {formatHealthForDisplay(hp, maxHp)}
+              </div>
             </div>
           </div>
           
           {maxShield > 0 && (
-            <div className="stat-bar shield-bar">
-              <div className="bar-label">SHIELD</div>
-              <div className="bar-container">
+            <div className="flex items-center gap-2 md:gap-2.5">
+              <div className="font-orbitron text-[10px] md:text-xs font-bold w-[50px] md:w-[60px] text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">SHIELD</div>
+              <div className="relative w-[150px] md:w-[200px] h-4 md:h-5 bg-black/60 border-2 border-white/30 rounded overflow-hidden">
                 <div 
-                  className="bar-fill shield-fill" 
+                  className="absolute top-0 left-0 h-full bg-gradient-to-r from-[#3742fa] to-[#5f27cd] shadow-[0_0_15px_rgba(55,66,250,0.6)] transition-[width] duration-200"
                   style={{ width: `${shieldPercent}%` }}
                 />
-                <div className="bar-text">{formatHealthForDisplay(shield, maxShield)}</div>
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 font-orbitron text-[9px] md:text-[11px] font-semibold text-white drop-shadow-[1px_1px_2px_rgba(0,0,0,0.8)]">
+                  {formatHealthForDisplay(shield, maxShield)}
+                </div>
               </div>
             </div>
           )}
         </div>
         
-        <div className="hud-right">
-          <div className="score">
-            <span className="score-label">SCORE</span>
-            <span className="score-value">{score.toLocaleString()}</span>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-col items-end">
+            <span className="font-orbitron text-[8px] md:text-[10px] text-white/60 uppercase tracking-[1px] md:tracking-[2px]">SCORE</span>
+            <span className="font-orbitron text-xl md:text-3xl font-bold text-[#ffa502] drop-shadow-[0_0_20px_rgba(255,165,2,0.6)]">{score.toLocaleString()}</span>
           </div>
-          <div className="wave">
-            <span className="wave-label">WAVE</span>
-            <span className="wave-value">{wave}</span>
+          <div className="flex flex-col items-end">
+            <span className="font-orbitron text-[8px] md:text-[10px] text-white/60 uppercase tracking-[1px] md:tracking-[2px]">WAVE</span>
+            <span className="font-orbitron text-lg md:text-2xl font-bold text-[#2ed573] drop-shadow-[0_0_20px_rgba(46,213,115,0.6)]">{wave}</span>
           </div>
         </div>
       </div>
       
-      <div className="hud-bottom">
-        <div className="exp-bar-bottom">
-          <div className="bar-container exp-container">
+      <div className="absolute bottom-0 left-0 right-0 flex justify-center p-3 md:p-5 pointer-events-none z-10">
+        <div className="flex items-center justify-center">
+          <div className="relative w-[300px] md:w-[400px] h-4 md:h-5 bg-black/60 border-2 border-white/30 rounded overflow-hidden">
             <div 
-              className="bar-fill exp-fill" 
+              className="absolute top-0 left-0 h-full bg-gradient-to-r from-[#4dd0e1] to-[#26c6da] shadow-[0_0_15px_rgba(77,208,225,0.6)] transition-[width] duration-200"
               style={{ width: `${expPercent}%` }}
             />
-            <div className="bar-text">Level {level} - {exp} / {expToNextLevel}</div>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 font-orbitron text-[9px] md:text-[11px] font-semibold text-white drop-shadow-[1px_1px_2px_rgba(0,0,0,0.8)]">
+              Level {level} - {exp} / {expToNextLevel}
+            </div>
           </div>
         </div>
       </div>

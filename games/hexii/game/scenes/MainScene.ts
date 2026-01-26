@@ -155,8 +155,8 @@ export class MainScene extends Phaser.Scene {
       
       // Don't pause scene during boss dialogue camera pans - we need camera to update
       const bossDialoguePanning = state.bossDialoguePhase === 'pan_to_boss' || state.bossDialoguePhase === 'pan_to_player';
-      const shouldPauseScene = (state.isPaused && !bossDialoguePanning) || state.isConstructionMode || state.showPauseMenu;
-      const wasPausedScene = (prevState.isPaused && prevState.bossDialoguePhase !== 'pan_to_boss' && prevState.bossDialoguePhase !== 'pan_to_player') || prevState.isConstructionMode || prevState.showPauseMenu;
+      const shouldPauseScene = (state.isPaused && !bossDialoguePanning) || state.isConstructionMode || state.showPauseMenu || state.showAuthModal || state.isDead;
+      const wasPausedScene = (prevState.isPaused && prevState.bossDialoguePhase !== 'pan_to_boss' && prevState.bossDialoguePhase !== 'pan_to_player') || prevState.isConstructionMode || prevState.showPauseMenu || prevState.showAuthModal || prevState.isDead;
       
       if (shouldPauseScene && !wasPausedScene) {
         this.scene.pause('MainScene');
@@ -473,23 +473,24 @@ export class MainScene extends Phaser.Scene {
   }
 
   private advanceWave(): void {
-    const store = useGameStore.getState();
-    store.nextWave();
+    useGameStore.getState().nextWave();
     
+    // Get fresh state after increment
+    const store = useGameStore.getState();
     const currentWave = store.wave;
     this.waveTimer = 0;
     this.bossSpawned = false;
     
     // Exponential scaling for HP and damage
     this.enemyHpMultiplier = 1 + (currentWave - 1) * 0.25;
-    this.enemyDamageMultiplier = Math.pow(1.2, currentWave - 1); // 20% increase per wave (exponential)
+    this.enemyDamageMultiplier = Math.pow(1.05, currentWave - 1); // 20% increase per wave (exponential)
     this.enemiesPerSpawn = Math.min(1 + Math.floor((currentWave - 1) / 2), 5);
     this.spawnInterval = Math.max(1500 - (currentWave - 1) * 100, 500);
     
-    // In test mode, spawn boss every wave; otherwise every 3 waves
+    // In test mode, spawn boss every wave; otherwise every 5 waves
     const shouldSpawnBoss = TEST_MODE 
       ? currentWave > 0 
-      : (currentWave > 1 && currentWave % 3 === 0);
+      : (currentWave > 0 && currentWave % 5 === 0);
     
     if (shouldSpawnBoss) {
       this.time.delayedCall(1000, () => this.spawnBoss());
@@ -564,10 +565,15 @@ export class MainScene extends Phaser.Scene {
     this.bossSpawned = true;
     
     const store = useGameStore.getState();
-    const bossNumber = store.bossNumber;
+    const currentWave = store.wave;
     const bossesDefeated = store.bossesDefeated;
     
-    // Get boss type based on current boss number (1-5)
+    // Calculate boss number from wave: bosses spawn on waves 5, 10, 15, 20, 25, etc.
+    // Wave 5 = Boss 1, Wave 10 = Boss 2, Wave 15 = Boss 3, Wave 20 = Boss 4, Wave 25 = Boss 5, then cycles
+    const bossWaveIndex = Math.floor((currentWave - 1) / 5);
+    const bossNumber = (bossWaveIndex % 5) + 1;
+    
+    // Get boss type based on calculated boss number (1-5)
     const bossType = getBossTypeFromNumber(bossNumber);
     const bossShape = getBossShapeFromNumber(bossNumber);
     

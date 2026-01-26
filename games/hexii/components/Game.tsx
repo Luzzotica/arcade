@@ -13,7 +13,6 @@ import { WinScreen } from './WinScreen';
 import { useGameStore } from '../store/gameStore';
 import { audioManager } from '../game/audio/AudioManager';
 import { useGameSession } from '@/lib/supabase/hooks';
-import styles from './Game.module.css';
 
 interface GameProps {
   onReturnToMenu: () => void;
@@ -147,8 +146,8 @@ export function Game({ onReturnToMenu }: GameProps) {
   }, [isDead]);
 
   return (
-    <div className={styles.gameWrapper}>
-      <div ref={containerRef} id="game-container" />
+    <div className="relative w-screen h-screen">
+      <div ref={containerRef} id="game-container" className="w-full h-full [&_canvas]:block [&_canvas]:cursor-crosshair" />
       {!showBossDialogue && <HUD />}
       {!showBossDialogue && <BossHealthBar />}
       <WaveAnnouncement />

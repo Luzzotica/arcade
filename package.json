@@ -9,7 +9,8 @@
     "lint": "next lint",
     "generate:soundtrack": "tsx scripts/generate-soundtrack.ts",
     "generate:sfx": "tsx scripts/generate-sfx.ts",
-    "generate:mesh": "tsx scripts/generate-mesh.ts"
+    "generate:mesh": "tsx scripts/generate-mesh.ts",
+    "upload:post": "tsx scripts/upload-post.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
@@ -37,6 +38,7 @@
     "tailwindcss": "^4.1.18",
     "tsx": "^4.19.2",
     "typescript": "~5.9.3",
-    "typescript-eslint": "^8.46.4"
+    "typescript-eslint": "^8.46.4",
+    "upload-post": "^1.0.3"
   }
 }

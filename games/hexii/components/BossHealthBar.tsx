@@ -1,5 +1,4 @@
 import { useGameStore } from '../store/gameStore';
-import './BossHealthBar.css';
 
 export function BossHealthBar() {
   const bossHp = useGameStore((state) => state.bossHp);
@@ -29,18 +28,18 @@ export function BossHealthBar() {
     : 'linear-gradient(90deg, #ff0000, #ff4444)';
 
   return (
-    <div className="boss-health-bar-container">
-      <div className="boss-health-bar">
-        <div className="boss-health-bar-bg">
+    <div className="absolute top-0 left-0 right-0 flex justify-center pt-5 z-[100] pointer-events-none">
+      <div className="flex flex-col items-center gap-2">
+        <div className="w-[300px] md:w-[400px] h-6 md:h-[30px] bg-black/70 rounded-lg border-2 border-white/20 overflow-hidden relative shadow-[0_4px_20px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.1)]">
           <div 
-            className="boss-health-bar-fill"
+            className="h-full rounded-md transition-[width] duration-100 relative overflow-hidden shadow-[0_0_10px_rgba(255,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.3)] after:content-[''] after:absolute after:top-0 after:left-0 after:right-0 after:bottom-0 after:bg-gradient-to-r after:from-transparent after:via-white/30 after:to-transparent after:animate-[shimmer_2s_infinite]"
             style={{ 
               width: `${healthPercent}%`,
               background: gradient,
             }}
           />
         </div>
-        <div className="boss-health-bar-text">
+        <div className="font-orbitron text-sm md:text-lg font-bold text-white drop-shadow-[0_0_10px_rgba(255,0,0,0.5),0_2px_4px_rgba(0,0,0,0.8)] tracking-wide uppercase">
           BOSS HP: {Math.ceil(bossHp)}/{bossMaxHp} ({Math.ceil(healthPercent)}%)
         </div>
       </div>

@@ -36,6 +36,7 @@ export interface GameState {
   pendingHexChoices: HexModule[] | null; // For level up: 3 choices
   isPaused: boolean;
   showPauseMenu: boolean; // Show pause menu overlay
+  showAuthModal: boolean; // Show auth modal overlay
   isDead: boolean; // Player is dead
   showWaveAnnouncement: boolean; // Show wave announcement overlay
   score: number;
@@ -65,6 +66,7 @@ export interface GameState {
   setPaused: (paused: boolean) => void;
   togglePauseMenu: () => void;
   closePauseMenu: () => void;
+  setAuthModal: (show: boolean) => void;
   addScore: (points: number) => void;
   addExp: (amount: number) => void;
   levelUp: () => void;
@@ -145,6 +147,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   pendingHexChoices: null,
   isPaused: false,
   showPauseMenu: false,
+  showAuthModal: false,
   isDead: false,
   showWaveAnnouncement: false,
   score: 0,
@@ -308,6 +311,17 @@ export const useGameStore = create<GameState>((set, get) => ({
   // Close pause menu (resume game)
   closePauseMenu: () => set({ showPauseMenu: false, isPaused: false }),
   
+  // Set auth modal visibility
+  setAuthModal: (show: boolean) => {
+    const state = get();
+    set({ 
+      showAuthModal: show,
+      // Only update isPaused if we're not already paused for another reason
+      // When closing, only unpause if no other pause conditions exist
+      isPaused: show ? true : (state.showPauseMenu || state.isConstructionMode || state.showBossDialogue || state.showWinScreen || state.isDead)
+    });
+  },
+  
   // Add score
   addScore: (points: number) => set({ score: get().score + points }),
   
@@ -354,7 +368,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   setBossHealth: (hp: number | null, maxHp: number | null) => set({ bossHp: hp, bossMaxHp: maxHp }),
   
   // Set dead state
-  setDead: (dead: boolean) => set({ isDead: dead }),
+  setDead: (dead: boolean) => set({ isDead: dead, isPaused: dead }),
   
   // Set wave announcement visibility
   setWaveAnnouncement: (show: boolean) => set({ showWaveAnnouncement: show }),
@@ -428,6 +442,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     pendingHexChoices: null,
     isPaused: false,
     showPauseMenu: false,
+    showAuthModal: false,
     isDead: false,
     showWaveAnnouncement: false,
     score: 0,

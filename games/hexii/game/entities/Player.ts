@@ -69,12 +69,12 @@ export class Player {
     this.body.setDrag(PLAYER_DRAG, PLAYER_DRAG);
     this.body.setMaxVelocity(PLAYER_SPEED, PLAYER_SPEED);
     
-    // Set up WASD controls
+    // Set up WASD controls - don't capture to allow typing in input fields
     this.cursors = {
-      up: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-      down: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-      left: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      right: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+      up: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W, false),
+      down: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S, false),
+      left: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A, false),
+      right: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D, false),
     };
     
     // Set up mouse input
@@ -345,9 +345,22 @@ export class Player {
   }
   
   /**
+   * Check if an input element is currently focused
+   */
+  private isInputFocused(): boolean {
+    const activeElement = document.activeElement;
+    if (!activeElement) return false;
+    const tagName = activeElement.tagName.toLowerCase();
+    return tagName === 'input' || tagName === 'textarea' || activeElement.getAttribute('contenteditable') === 'true';
+  }
+
+  /**
    * Update player each frame
    */
   update(time: number, delta: number): void {
+    // Check if user is typing in an input field - skip game input processing
+    const isTyping = this.isInputFocused();
+    
     // Calculate movement speed multiplier
     const speedMultiplier = this.calculateMovementSpeedMultiplier();
     const currentMaxSpeed = PLAYER_SPEED * speedMultiplier;
@@ -357,35 +370,38 @@ export class Player {
     let accelX = 0;
     let accelY = 0;
     
-    if (this.isMobile && this.deviceOrientation) {
-      // Use accelerometer for movement on mobile
-      // gamma: left/right tilt (-90 to 90)
-      // beta: forward/backward tilt (-180 to 180)
-      // Normalize to -1 to 1 range
-      const sensitivity = 0.02; // Adjust sensitivity
-      accelX = Math.max(-1, Math.min(1, this.deviceOrientation.gamma * sensitivity));
-      accelY = Math.max(-1, Math.min(1, (this.deviceOrientation.beta - 90) * sensitivity));
-    } else {
-      // Use WASD controls
-      if (this.cursors.left.isDown) {
-        accelX = -1;
-      } else if (this.cursors.right.isDown) {
-        accelX = 1;
-      }
-      
-      if (this.cursors.up.isDown) {
-        accelY = -1;
-      } else if (this.cursors.down.isDown) {
-        accelY = 1;
-      }
-      
-      // Check for dash (YELLOW + YELLOW) - only on desktop
-      const dash = this.checkDash(delta);
-      if (dash) {
-        this.body.setVelocity(
-          this.body.velocity.x + dash.dashX,
-          this.body.velocity.y + dash.dashY
-        );
+    // Skip input processing if user is typing in an input field
+    if (!isTyping) {
+      if (this.isMobile && this.deviceOrientation) {
+        // Use accelerometer for movement on mobile
+        // gamma: left/right tilt (-90 to 90)
+        // beta: forward/backward tilt (-180 to 180)
+        // Normalize to -1 to 1 range
+        const sensitivity = 0.02; // Adjust sensitivity
+        accelX = Math.max(-1, Math.min(1, this.deviceOrientation.gamma * sensitivity));
+        accelY = Math.max(-1, Math.min(1, (this.deviceOrientation.beta - 90) * sensitivity));
+      } else {
+        // Use WASD controls
+        if (this.cursors.left.isDown) {
+          accelX = -1;
+        } else if (this.cursors.right.isDown) {
+          accelX = 1;
+        }
+        
+        if (this.cursors.up.isDown) {
+          accelY = -1;
+        } else if (this.cursors.down.isDown) {
+          accelY = 1;
+        }
+        
+        // Check for dash (YELLOW + YELLOW) - only on desktop
+        const dash = this.checkDash(delta);
+        if (dash) {
+          this.body.setVelocity(
+            this.body.velocity.x + dash.dashX,
+            this.body.velocity.y + dash.dashY
+          );
+        }
       }
     }
     
