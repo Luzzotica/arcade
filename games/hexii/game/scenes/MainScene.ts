@@ -67,6 +67,14 @@ export class MainScene extends Phaser.Scene {
     }
     return this.currentStats;
   }
+
+  /**
+   * Get active enemies that haven't been destroyed
+   * Filters out enemies that are inactive or have lost their scene reference
+   */
+  private getActiveEnemies(): Enemy[] {
+    return this.enemies.filter((enemy) => enemy.active && enemy.scene);
+  }
   
   /**
    * Update synergy stats and store
@@ -311,18 +319,18 @@ export class MainScene extends Phaser.Scene {
     
     // Update projectiles
     const projectiles = this.player.getProjectiles();
-    const enemyObjects = this.enemies.filter(e => e.active).map(e => e as Phaser.GameObjects.GameObject);
+    const enemyObjects = this.getActiveEnemies().map(e => e as Phaser.GameObjects.GameObject);
     projectiles.forEach((projectile) => projectile.update(_time, delta, enemyObjects));
     
     // Update enemies
-    this.enemies.forEach((enemy) => {
+    this.getActiveEnemies().forEach((enemy) => {
       enemy.setTarget(playerPos.x, playerPos.y);
       enemy.update(delta);
     });
     
     this.checkEnemyEnemyCollisions();
     this.updateBossHealthBar();
-    this.enemies = this.enemies.filter((e) => e.active);
+    this.enemies = this.enemies.filter((e) => e.active && e.scene);
     
     this.expDrops.forEach((drop) => drop.update());
     this.expDrops = this.expDrops.filter((d) => d.active);
@@ -366,8 +374,7 @@ export class MainScene extends Phaser.Scene {
       const trailX = playerPos.x - Math.cos(playerAngle) * trailLength;
       const trailY = playerPos.y - Math.sin(playerAngle) * trailLength;
       
-      this.enemies.forEach((enemy) => {
-        if (!enemy.active) return;
+      this.getActiveEnemies().forEach((enemy) => {
         const dx = enemy.x - trailX;
         const dy = enemy.y - trailY;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -383,8 +390,8 @@ export class MainScene extends Phaser.Scene {
       const wakeX = playerPos.x - Math.cos(playerAngle) * wakeLength;
       const wakeY = playerPos.y - Math.sin(playerAngle) * wakeLength;
       
-      this.enemies.forEach((enemy) => {
-        if (!enemy.active || enemy.isBoss()) return; // Bosses can't be pulled
+      this.getActiveEnemies().forEach((enemy) => {
+        if (enemy.isBoss()) return; // Bosses can't be pulled
         const dx = enemy.x - wakeX;
         const dy = enemy.y - wakeY;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -440,9 +447,7 @@ export class MainScene extends Phaser.Scene {
     
     if (!hasBlueField) return;
     
-    this.enemies.forEach((enemy) => {
-      if (!enemy.active) return;
-      
+    this.getActiveEnemies().forEach((enemy) => {
       const dx = enemy.x - playerPos.x;
       const dy = enemy.y - playerPos.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -501,11 +506,11 @@ export class MainScene extends Phaser.Scene {
   }
 
   private checkEnemyEnemyCollisions(): void {
-    for (let i = 0; i < this.enemies.length; i++) {
-      for (let j = i + 1; j < this.enemies.length; j++) {
-        const e1 = this.enemies[i];
-        const e2 = this.enemies[j];
-        if (!e1.active || !e2.active) continue;
+    const activeEnemies = this.getActiveEnemies();
+    for (let i = 0; i < activeEnemies.length; i++) {
+      for (let j = i + 1; j < activeEnemies.length; j++) {
+        const e1 = activeEnemies[i];
+        const e2 = activeEnemies[j];
         
         // Bosses can't be pushed
         if (e1.isBoss() || e2.isBoss()) continue;
@@ -915,8 +920,7 @@ export class MainScene extends Phaser.Scene {
         // UNSTABLE_ISOTOPE: Explode on pickup
         if (stats.synergies.unstableIsotope) {
           const explosionRadius = SYNERGY_VALUES.UNSTABLE_ISOTOPE.explosionRadius;
-          this.enemies.forEach((enemy) => {
-            if (!enemy.active) return;
+          this.getActiveEnemies().forEach((enemy) => {
             const edx = enemy.x - drop.x;
             const edy = enemy.y - drop.y;
             const edist = Math.sqrt(edx * edx + edy * edy);
@@ -1092,8 +1096,7 @@ export class MainScene extends Phaser.Scene {
       });
       
       // Damage enemies in path
-      this.enemies.forEach((enemy) => {
-        if (!enemy.active) return;
+      this.getActiveEnemies().forEach((enemy) => {
         const dx = enemy.x - x;
         const dy = enemy.y - y;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -1204,7 +1207,7 @@ export class MainScene extends Phaser.Scene {
 
   private updateBossHealthBar(): void {
     const store = useGameStore.getState();
-    const boss = this.enemies.find((e) => e.active && e.isBoss());
+    const boss = this.getActiveEnemies().find((e) => e.isBoss());
     
     if (!boss) {
       store.setBossHealth(null, null);

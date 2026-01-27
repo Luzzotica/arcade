@@ -1,5 +1,6 @@
 import { useGameStore } from '../store/gameStore';
 import { formatHealthForDisplay } from '../game/config/SynergyConfig';
+import { usePresence } from '@/lib/supabase/hooks';
 
 export function HUD() {
   const hp = useGameStore((state) => state.hp);
@@ -11,10 +12,18 @@ export function HUD() {
   const level = useGameStore((state) => state.level);
   const exp = useGameStore((state) => state.exp);
   const expToNextLevel = useGameStore((state) => state.expToNextLevel);
+  const { currentGamePlayers } = usePresence('hexii');
 
   const hpPercent = (hp / maxHp) * 100;
   const shieldPercent = maxShield > 0 ? (shield / maxShield) * 100 : 0;
   const expPercent = (exp / expToNextLevel) * 100;
+  
+  // Calculate other players (excluding current player)
+  // currentGamePlayers includes the current player, so subtract 1 to get others
+  const totalPlayers = currentGamePlayers || 0;
+  const otherPlayers = totalPlayers > 0 ? totalPlayers - 1 : 0;
+  // Show if there are 2+ other players (meaning 3+ total players)
+  const showOtherPlayers = otherPlayers >= 1;
 
   return (
     <>
@@ -61,7 +70,8 @@ export function HUD() {
         </div>
       </div>
       
-      <div className="absolute bottom-0 left-0 right-0 flex justify-center p-3 md:p-5 pointer-events-none z-10">
+      <div className="absolute bottom-0 left-0 right-0 grid grid-cols-3 items-end p-3 md:p-5 pointer-events-none z-10">
+        <div />
         <div className="flex items-center justify-center">
           <div className="relative w-[300px] md:w-[400px] h-4 md:h-5 bg-black/60 border-2 border-white/30 rounded overflow-hidden">
             <div 
@@ -72,6 +82,14 @@ export function HUD() {
               Level {level} - {exp} / {expToNextLevel}
             </div>
           </div>
+        </div>
+        <div className="flex justify-end">
+          {showOtherPlayers && (
+            <div className="font-orbitron flex items-center gap-2 text-[10px] md:text-xs text-white/60 tracking-wide">
+              <span className="w-2 h-2 rounded-full bg-[#2ed573] shadow-[0_0_8px_#2ed573] animate-pulse" />
+              {otherPlayers} other playing
+            </div>
+          )}
         </div>
       </div>
     </>
