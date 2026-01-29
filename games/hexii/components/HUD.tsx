@@ -25,6 +25,8 @@ export function HUD() {
   // Show if there are 2+ other players (meaning 3+ total players)
   const showOtherPlayers = otherPlayers >= 1;
 
+  const togglePauseMenu = useGameStore((state) => state.togglePauseMenu);
+
   return (
     <>
       <div className="absolute top-0 left-0 right-0 flex justify-between p-3 md:p-5 pointer-events-none z-10">
@@ -60,6 +62,16 @@ export function HUD() {
               </div>
             </div>
           )}
+
+          {/* Pause button - beneath health bar */}
+          <div className="pointer-events-auto">
+            <button
+              onClick={togglePauseMenu}
+              className="font-orbitron text-xs md:text-sm font-bold px-3 py-1.5 md:px-4 md:py-2 border-none rounded-lg cursor-pointer transition-all uppercase tracking-[2px] min-h-[32px] md:min-h-[36px] bg-gradient-to-r from-[#ffa502] to-[#ff9500] text-white shadow-[0_4px_20px_rgba(255,165,2,0.4)] hover:bg-gradient-to-r hover:from-[#ffb733] hover:to-[#ffa502] hover:-translate-y-0.5 hover:shadow-[0_6px_25px_rgba(255,165,2,0.5)] active:translate-y-0.5 focus:outline-none focus:ring-0"
+            >
+              Pause
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-col items-end gap-2">
@@ -99,7 +111,7 @@ export function HUD() {
           </div>
         </div>
 
-        {/* Playing now indicator - above XP bar on mobile, right column on desktop */}
+        {/* Playing now indicator - above XP bar in bottom right */}
         <div className="flex justify-end w-full md:w-auto mb-2 md:mb-0">
           {showOtherPlayers && (
             <div className="font-orbitron flex items-center gap-2 text-[10px] md:text-xs text-white/60 tracking-wide">
