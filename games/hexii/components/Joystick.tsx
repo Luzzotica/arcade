@@ -6,14 +6,14 @@ const JOYSTICK_HANDLE_RADIUS = 25; // Inner circle radius
 const JOYSTICK_SIZE = JOYSTICK_BASE_RADIUS * 2;
 
 export function Joystick() {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const touchAreaRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [joystickCenter, setJoystickCenter] = useState<{
     x: number;
     y: number;
   } | null>(null);
-  const activeTouchIdRef = useRef<number | null>(null); // Track which touch is controlling the joystick
+  const activeTouchIdRef = useRef<number | null>(null);
   const setJoystickInput = useGameStore((state) => state.setJoystickInput);
   const clearJoystickInput = useGameStore((state) => state.clearJoystickInput);
 
@@ -24,11 +24,10 @@ export function Joystick() {
   } | null>(null);
 
   useEffect(() => {
-    // Calculate position on mount and window resize
     const updatePosition = () => {
       setDefaultPosition({
-        x: window.innerWidth / 2, // Center horizontally
-        y: window.innerHeight - JOYSTICK_BASE_RADIUS - 100, // Moved up from bottom
+        x: window.innerWidth / 2,
+        y: window.innerHeight - JOYSTICK_BASE_RADIUS - 100,
       });
     };
 
@@ -49,7 +48,6 @@ export function Joystick() {
       let clientY: number;
 
       if ("touches" in e) {
-        // Find the touch with the matching identifier, or use the first touch for start events
         const targetTouchId = touchId ?? activeTouchIdRef.current;
         let touch: Touch | undefined;
 
@@ -63,7 +61,6 @@ export function Joystick() {
           );
         }
 
-        // Fallback to first touch if not found (for start events)
         if (!touch && e.touches.length > 0) {
           touch = e.touches[0];
         }
@@ -99,7 +96,6 @@ export function Joystick() {
       e.preventDefault();
       e.stopPropagation();
 
-      // Get the touch/mouse position
       let clientX: number;
       let clientY: number;
       let touchId: number | null = null;
@@ -114,37 +110,16 @@ export function Joystick() {
         const mouseEvent = e as MouseEvent;
         clientX = mouseEvent.clientX;
         clientY = mouseEvent.clientY;
-        activeTouchIdRef.current = -1; // Use -1 for mouse events
+        activeTouchIdRef.current = -1;
       }
 
-      // Check if touch is in bottom half of screen
-      const isInBottomHalf = clientY > window.innerHeight / 2;
-
-      if (isInBottomHalf) {
-        // Set joystick center to touch position
-        setJoystickCenter({ x: clientX, y: clientY });
-        setIsDragging(true);
-        setPosition({ x: 0, y: 0 });
-        clearJoystickInput();
-      } else {
-        // If joystick already exists, use it
-        if (joystickCenter) {
-          setIsDragging(true);
-          const pos = getPositionFromEvent(e, touchId, joystickCenter);
-          setPosition(pos);
-          const maxDistance = JOYSTICK_BASE_RADIUS - JOYSTICK_HANDLE_RADIUS;
-          const normalizedX = pos.x / maxDistance;
-          const normalizedY = pos.y / maxDistance; // Removed inversion
-          setJoystickInput(normalizedX, normalizedY);
-        }
-      }
+      // Set joystick center to touch position
+      setJoystickCenter({ x: clientX, y: clientY });
+      setIsDragging(true);
+      setPosition({ x: 0, y: 0 });
+      clearJoystickInput();
     },
-    [
-      getPositionFromEvent,
-      setJoystickInput,
-      clearJoystickInput,
-      joystickCenter,
-    ],
+    [clearJoystickInput],
   );
 
   const handleMove = useCallback(
@@ -152,13 +127,11 @@ export function Joystick() {
       if (!isDragging || !joystickCenter) return;
       if (activeTouchIdRef.current === null) return;
 
-      // For touch events, only process if it's our tracked touch
       if ("touches" in e) {
-        // Find the touch with our identifier
         const ourTouch = Array.from(e.touches).find(
           (touch) => touch.identifier === activeTouchIdRef.current,
         );
-        if (!ourTouch) return; // Our touch is gone, but don't end yet (might be temporary)
+        if (!ourTouch) return;
       }
 
       e.preventDefault();
@@ -171,7 +144,7 @@ export function Joystick() {
       setPosition(pos);
       const maxDistance = JOYSTICK_BASE_RADIUS - JOYSTICK_HANDLE_RADIUS;
       const normalizedX = pos.x / maxDistance;
-      const normalizedY = pos.y / maxDistance; // Removed inversion
+      const normalizedY = -pos.y / maxDistance; // Invert Y for intuitive control
       setJoystickInput(normalizedX, normalizedY);
     },
     [isDragging, joystickCenter, getPositionFromEvent, setJoystickInput],
@@ -179,19 +152,16 @@ export function Joystick() {
 
   const handleEnd = useCallback(
     (e?: TouchEvent | MouseEvent) => {
-      // For touch events, only end if it's our tracked touch
       if (e && "changedTouches" in e) {
         const touchEvent = e as TouchEvent;
         if (activeTouchIdRef.current === null) return;
 
-        // Check if the ended touch is our tracked touch
         const ourTouch = Array.from(touchEvent.changedTouches).find(
           (touch) => touch.identifier === activeTouchIdRef.current,
         );
-        if (!ourTouch) return; // Not our touch, ignore
+        if (!ourTouch) return;
       }
 
-      // Only end if we have an active touch (mouse uses -1)
       if (activeTouchIdRef.current === null) return;
 
       setIsDragging(false);
@@ -203,21 +173,16 @@ export function Joystick() {
     [clearJoystickInput],
   );
 
+  // Attach events to the React-rendered touch area element (like the working joystick)
   useEffect(() => {
-    // Create a full-screen touch area for bottom half
-    const touchArea = document.createElement("div");
-    touchArea.style.position = "fixed";
-    touchArea.style.bottom = "0";
-    touchArea.style.left = "0";
-    touchArea.style.right = "0";
-    touchArea.style.height = "50%";
-    touchArea.style.zIndex = "5";
-    touchArea.style.pointerEvents = "auto";
-    touchArea.style.touchAction = "none";
-    document.body.appendChild(touchArea);
+    const touchArea = touchAreaRef.current;
+    if (!touchArea) return;
 
+    // Attach start events to the touch area element directly
     touchArea.addEventListener("mousedown", handleStart);
     touchArea.addEventListener("touchstart", handleStart, { passive: false });
+
+    // Attach move/end events to window for tracking outside the element
     window.addEventListener("mousemove", handleMove);
     window.addEventListener("touchmove", handleMove, { passive: false });
     window.addEventListener("mouseup", handleEnd);
@@ -232,7 +197,6 @@ export function Joystick() {
       window.removeEventListener("mouseup", handleEnd);
       window.removeEventListener("touchend", handleEnd);
       window.removeEventListener("touchcancel", handleEnd);
-      document.body.removeChild(touchArea);
     };
   }, [handleStart, handleMove, handleEnd]);
 
@@ -241,69 +205,79 @@ export function Joystick() {
   const currentCenter = joystickCenter || defaultPosition;
 
   return (
-    <div className="fixed inset-0 z-[5] touch-none pointer-events-none">
-      {/* Faint joystick outline when not active */}
-      {!isDragging && !joystickCenter && (
-        <>
-          {/* Joystick Base Outline */}
+    <>
+      {/* Touch area covering bottom half of screen - React-rendered element */}
+      <div
+        ref={touchAreaRef}
+        className="fixed bottom-0 left-0 right-0 z-[5] touch-none select-none"
+        style={{
+          height: "50%",
+          // Transparent but still captures touch events
+          backgroundColor: "transparent",
+        }}
+      />
+
+      {/* Visual joystick layer - pointer-events-none so touches go through to touch area */}
+      <div className="fixed inset-0 z-[6] pointer-events-none">
+        {/* Faint joystick outline when not active */}
+        {!isDragging && !joystickCenter && (
+          <>
+            <div
+              className="absolute rounded-full border border-white/15 bg-black/10 backdrop-blur-sm"
+              style={{
+                left: `${defaultPosition.x}px`,
+                top: `${defaultPosition.y}px`,
+                width: `${JOYSTICK_SIZE}px`,
+                height: `${JOYSTICK_SIZE}px`,
+                transform: "translate(-50%, -50%)",
+                boxShadow: "0 0 10px rgba(255, 255, 255, 0.1)",
+              }}
+            />
+            <div
+              className="absolute rounded-full border border-white/15 bg-white/10"
+              style={{
+                left: `${defaultPosition.x}px`,
+                top: `${defaultPosition.y}px`,
+                width: `${JOYSTICK_HANDLE_RADIUS * 2}px`,
+                height: `${JOYSTICK_HANDLE_RADIUS * 2}px`,
+                transform: "translate(-50%, -50%)",
+                boxShadow: "0 0 8px rgba(255, 255, 255, 0.1)",
+              }}
+            />
+          </>
+        )}
+
+        {/* Active joystick */}
+        {joystickCenter && (
           <div
-            className="absolute rounded-full border border-white/15 bg-black/10 backdrop-blur-sm pointer-events-none"
+            className="absolute rounded-full border-2 border-white/40 bg-black/30 backdrop-blur-sm"
             style={{
-              left: `${defaultPosition.x}px`,
-              top: `${defaultPosition.y}px`,
+              left: `${currentCenter.x}px`,
+              top: `${currentCenter.y}px`,
               width: `${JOYSTICK_SIZE}px`,
               height: `${JOYSTICK_SIZE}px`,
               transform: "translate(-50%, -50%)",
-              boxShadow: "0 0 10px rgba(255, 255, 255, 0.1)",
-            }}
-          />
-          {/* Joystick Handle Outline */}
-          <div
-            className="absolute rounded-full border border-white/15 bg-white/10 pointer-events-none"
-            style={{
-              left: `${defaultPosition.x}px`,
-              top: `${defaultPosition.y}px`,
-              width: `${JOYSTICK_HANDLE_RADIUS * 2}px`,
-              height: `${JOYSTICK_HANDLE_RADIUS * 2}px`,
-              transform: "translate(-50%, -50%)",
-              boxShadow: "0 0 8px rgba(255, 255, 255, 0.1)",
-            }}
-          />
-        </>
-      )}
-
-      {/* Active joystick */}
-      {joystickCenter && (
-        <div
-          ref={containerRef}
-          className="absolute rounded-full border-2 border-white/40 bg-black/30 backdrop-blur-sm pointer-events-none"
-          style={{
-            left: `${currentCenter.x}px`,
-            top: `${currentCenter.y}px`,
-            width: `${JOYSTICK_SIZE}px`,
-            height: `${JOYSTICK_SIZE}px`,
-            transform: "translate(-50%, -50%)",
-            boxShadow: isDragging
-              ? "0 0 20px rgba(255, 255, 255, 0.3)"
-              : "0 0 10px rgba(255, 255, 255, 0.1)",
-          }}
-        >
-          {/* Joystick Handle */}
-          <div
-            className="absolute rounded-full bg-white/60 border-2 border-white/80 transition-all duration-75"
-            style={{
-              width: `${JOYSTICK_HANDLE_RADIUS * 2}px`,
-              height: `${JOYSTICK_HANDLE_RADIUS * 2}px`,
-              left: "50%",
-              top: "50%",
-              transform: `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px))`,
               boxShadow: isDragging
-                ? "0 0 15px rgba(255, 255, 255, 0.5)"
-                : "0 0 8px rgba(255, 255, 255, 0.3)",
+                ? "0 0 20px rgba(255, 255, 255, 0.3)"
+                : "0 0 10px rgba(255, 255, 255, 0.1)",
             }}
-          />
-        </div>
-      )}
-    </div>
+          >
+            <div
+              className="absolute rounded-full bg-white/60 border-2 border-white/80 transition-all duration-75"
+              style={{
+                width: `${JOYSTICK_HANDLE_RADIUS * 2}px`,
+                height: `${JOYSTICK_HANDLE_RADIUS * 2}px`,
+                left: "50%",
+                top: "50%",
+                transform: `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px))`,
+                boxShadow: isDragging
+                  ? "0 0 15px rgba(255, 255, 255, 0.5)"
+                  : "0 0 8px rgba(255, 255, 255, 0.3)",
+              }}
+            />
+          </div>
+        )}
+      </div>
+    </>
   );
 }
