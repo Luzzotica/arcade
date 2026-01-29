@@ -77,11 +77,13 @@ export function Joystick() {
       const pos = getTouchPosition(e);
       if (!pos) return;
 
-      // Set center to touch position
+      // Always reset and clear any previous state first
+      clearJoystickInput();
+      setHandlePosition({ x: 0, y: 0 });
+
+      // Set new center position and activate
       setCenterPosition(pos);
       setIsActive(true);
-      setHandlePosition({ x: 0, y: 0 });
-      clearJoystickInput();
     },
     [getTouchPosition, clearJoystickInput],
   );
@@ -121,9 +123,9 @@ export function Joystick() {
 
   const handleTouchEnd = useCallback(
     (e: TouchEvent) => {
-      if (!isActiveRef.current) return;
       e.preventDefault();
 
+      // Always reset state, even if ref says not active (handles race conditions)
       setIsActive(false);
       setHandlePosition({ x: 0, y: 0 });
       setCenterPosition(null);
