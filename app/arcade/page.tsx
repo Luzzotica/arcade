@@ -1,16 +1,27 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { UserMenu } from '@/components/auth/UserMenu';
-import { usePresence } from '@/lib/supabase/hooks';
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { UserMenu } from "@/components/auth/UserMenu";
+import { usePresence } from "@/lib/supabase/hooks";
+import { isMobileDevice } from "@/lib/utils/mobile-detector";
 
-const games = [
+interface Game {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  mobileFriendly: boolean;
+}
+
+const games: Game[] = [
   {
-    id: 'hexii',
-    name: 'Hexii',
-    description: 'Prove that Hexagons are the Bestagons. Build your hex cluster and defeat the evil Septagon!',
-    color: '#3742fa',
+    id: "hexii",
+    name: "Hexii",
+    description:
+      "Prove that Hexagons are the Bestagons. Build your hex cluster and defeat the evil Septagon!",
+    color: "#3742fa",
+    mobileFriendly: true,
   },
   // Add more games here in the future
 ];
@@ -26,16 +37,22 @@ interface GameAnalytics {
 
 export default function ArcadePage() {
   const [hexPositions, setHexPositions] = useState<HexPosition[]>([]);
-  const [gameAnalytics, setGameAnalytics] = useState<Record<string, GameAnalytics>>({});
+  const [gameAnalytics, setGameAnalytics] = useState<
+    Record<string, GameAnalytics>
+  >({});
+  const [isMobile, setIsMobile] = useState(false);
   const { totalOnline, playersInGame } = usePresence();
 
   useEffect(() => {
+    // Check if mobile
+    setIsMobile(isMobileDevice());
+
     // Generate random positions only on client side
     setHexPositions(
       Array.from({ length: 15 }, () => ({
         left: Math.random() * 100,
         top: Math.random() * 100,
-      }))
+      })),
     );
 
     // Fetch analytics for each game
@@ -58,10 +75,23 @@ export default function ArcadePage() {
     fetchAnalytics();
   }, []);
 
+  // Sort games: mobile-friendly first on mobile devices
+  const sortedGames = [...games].sort((a, b) => {
+    if (isMobile) {
+      // On mobile: mobile-friendly games first
+      if (a.mobileFriendly && !b.mobileFriendly) return -1;
+      if (!a.mobileFriendly && b.mobileFriendly) return 1;
+    }
+    return 0; // Keep original order if both have same mobile-friendly status
+  });
+
   return (
     <div className="relative w-full min-h-screen bg-[radial-gradient(ellipse_at_30%_20%,rgba(55,66,250,0.15)_0%,transparent_50%),radial-gradient(ellipse_at_70%_80%,rgba(255,71,87,0.1)_0%,transparent_50%),linear-gradient(180deg,#0a0a14_0%,#1a1a2e_50%,#0a0a14_100%)] p-5 pb-10 overflow-hidden">
       <div className="relative z-20 flex justify-between items-center max-w-[1200px] mx-auto mb-10">
-        <Link href="/" className="inline-block text-white/60 no-underline text-sm tracking-wider transition-colors hover:text-white/90">
+        <Link
+          href="/"
+          className="inline-block text-white/60 no-underline text-sm tracking-wider transition-colors hover:text-white/90"
+        >
           ← Back to Home
         </Link>
         <div className="flex items-center gap-4">
@@ -82,13 +112,23 @@ export default function ArcadePage() {
           Select a game to play
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-15">
-          {games.map((game) => (
+          {sortedGames.map((game) => (
             <Link
               key={game.id}
               href={`/arcade/${game.id}`}
-              className="bg-white/5 border-2 border-white/10 rounded-2xl p-8 md:p-10 no-underline text-inherit transition-all hover:bg-white/10 hover:border-white/30 hover:-translate-y-2 hover:shadow-[0_20px_60px_rgba(0,0,0,0.4)] flex flex-col items-center text-center"
+              className="bg-white/5 border-2 border-white/10 rounded-2xl p-8 md:p-10 no-underline text-inherit transition-all hover:bg-white/10 hover:border-white/30 hover:-translate-y-2 hover:shadow-[0_20px_60px_rgba(0,0,0,0.4)] flex flex-col items-center text-center relative"
             >
-              <div className="text-6xl mb-6 drop-shadow-[0_0_20px_rgba(100,100,255,0.5)]">⬡</div>
+              {/* Mobile Friendly Tag */}
+              {game.mobileFriendly && (
+                <div className="absolute bottom-4 left-4 px-2.5 py-1 bg-[#2ed573]/20 border border-[#2ed573]/40 rounded-full flex items-center">
+                  <span className="font-orbitron text-[10px] text-[#2ed573] uppercase tracking-[1px]">
+                    📱 Mobile
+                  </span>
+                </div>
+              )}
+              <div className="text-6xl mb-6 drop-shadow-[0_0_20px_rgba(100,100,255,0.5)]">
+                ⬡
+              </div>
               <h2 className="font-orbitron text-2xl md:text-3xl font-bold tracking-[4px] mb-4 text-white">
                 {game.name}
               </h2>
@@ -104,7 +144,8 @@ export default function ArcadePage() {
                 ) : null}
                 {gameAnalytics[game.id]?.total_sessions ? (
                   <span className="text-xs text-white/40">
-                    {gameAnalytics[game.id].total_sessions.toLocaleString()} total plays
+                    {gameAnalytics[game.id].total_sessions.toLocaleString()}{" "}
+                    total plays
                   </span>
                 ) : null}
               </div>

@@ -14,7 +14,7 @@ import { Joystick } from "./Joystick";
 import { useGameStore } from "../store/gameStore";
 import { audioManager } from "../game/audio/AudioManager";
 import { useGameSession } from "@/lib/supabase/hooks";
-import { isMobileDevice } from "../game/utils/MobileDetector";
+import { isMobileDevice } from "@/lib/utils/mobile-detector";
 
 interface GameProps {
   onReturnToMenu: () => void;

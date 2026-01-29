@@ -13,7 +13,7 @@ import { useGameStore } from "../../store/gameStore";
 import { Projectile, type ProjectileConfig } from "./Projectile";
 import { synergyCalculator } from "../utils/SynergyCalculator";
 import { audioManager } from "../audio/AudioManager";
-import { isMobileDevice } from "../utils/MobileDetector";
+import { isMobileDevice } from "@/lib/utils/mobile-detector";
 import type { Enemy } from "./Enemy";
 
 export class Player {
