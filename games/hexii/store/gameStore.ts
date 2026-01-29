@@ -1,10 +1,10 @@
-import { create } from 'zustand';
-import type { RingOfPerfectionType } from '../game/utils/SynergyCalculator';
-import { BASE_HEX_STATS } from '../game/config/SynergyConfig';
-import type { BossShape } from '../game/data/BossDialogues';
+import { create } from "zustand";
+import type { RingOfPerfectionType } from "../game/utils/SynergyCalculator";
+import { BASE_HEX_STATS } from "../game/config/SynergyConfig";
+import type { BossShape } from "../game/data/BossDialogues";
 
-export type HexColor = 'RED' | 'GREEN' | 'YELLOW' | 'BLUE' | 'CYAN' | 'ORANGE';
-export type HexType = 'CORE' | 'MODULE';
+export type HexColor = "RED" | "GREEN" | "YELLOW" | "BLUE" | "CYAN" | "ORANGE";
+export type HexType = "CORE" | "MODULE";
 
 export interface HexModule {
   type: HexType;
@@ -15,7 +15,7 @@ export interface HexModule {
 export interface GameState {
   // Ship state - stored as Map with "q,r" keys
   ship: Record<string, HexModule>;
-  
+
   // Player stats
   hp: number;
   maxHp: number;
@@ -29,7 +29,7 @@ export interface GameState {
   shieldRegenRate: number; // Calculated from synergies (per second)
   hpRegenRate: number; // Calculated from synergies (per second)
   activeUltimates: RingOfPerfectionType[]; // Ring of Perfection effects
-  
+
   // Game state
   isConstructionMode: boolean;
   pendingHex: HexModule | null;
@@ -41,19 +41,27 @@ export interface GameState {
   showWaveAnnouncement: boolean; // Show wave announcement overlay
   score: number;
   wave: number;
-  
+
   // Boss state
   bossHp: number | null;
   bossMaxHp: number | null;
   bossNumber: number; // 1-5, cycles after 5
   bossesDefeated: number; // Total bosses killed (for scaling)
   showBossDialogue: boolean;
-  bossDialoguePhase: 'pan_to_boss' | 'boss_talking' | 'pan_to_player' | 'player_talking' | null;
+  bossDialoguePhase:
+    | "pan_to_boss"
+    | "boss_talking"
+    | "pan_to_player"
+    | "player_talking"
+    | null;
   currentBossType: BossShape | null;
   bossPosition: { x: number; y: number } | null; // For camera panning
   showWinScreen: boolean;
   hasWon: boolean; // True after first septagon defeat
-  
+
+  // Mobile joystick input
+  joystickInput: { x: number; y: number } | null;
+
   // Actions
   initializeShip: (coreColor: HexColor) => void;
   attachHex: (key: string, hex: HexModule) => void;
@@ -74,10 +82,23 @@ export interface GameState {
   setBossHealth: (hp: number | null, maxHp: number | null) => void;
   setDead: (dead: boolean) => void;
   setWaveAnnouncement: (show: boolean) => void;
-  setBossDialogue: (show: boolean, bossType?: BossShape, bossPos?: { x: number; y: number }) => void;
-  setBossDialoguePhase: (phase: 'pan_to_boss' | 'boss_talking' | 'pan_to_player' | 'player_talking' | null) => void;
+  setBossDialogue: (
+    show: boolean,
+    bossType?: BossShape,
+    bossPos?: { x: number; y: number },
+  ) => void;
+  setBossDialoguePhase: (
+    phase:
+      | "pan_to_boss"
+      | "boss_talking"
+      | "pan_to_player"
+      | "player_talking"
+      | null,
+  ) => void;
   defeatBoss: (bossType?: string) => void;
   setWinScreen: (show: boolean) => void;
+  setJoystickInput: (x: number, y: number) => void;
+  clearJoystickInput: () => void;
   reset: () => void;
 }
 
@@ -87,19 +108,21 @@ const calculateBaseStats = (ship: Record<string, HexModule>) => {
   let maxShield = 0;
   let pickupRadiusBonus = 0;
   let damageReduction = 0;
-  
+
   // Base stats from hexes (using config values)
   Object.values(ship).forEach((hex) => {
-    if (hex.color === 'GREEN') maxHp += BASE_HEX_STATS.GREEN.hpPerHex;
-    if (hex.color === 'BLUE') maxShield += BASE_HEX_STATS.BLUE.shieldPerHex;
-    if (hex.color === 'CYAN') pickupRadiusBonus += BASE_HEX_STATS.CYAN.pickupRadiusPerHex;
-    if (hex.color === 'ORANGE') damageReduction += BASE_HEX_STATS.ORANGE.damageReductionPerHex;
+    if (hex.color === "GREEN") maxHp += BASE_HEX_STATS.GREEN.hpPerHex;
+    if (hex.color === "BLUE") maxShield += BASE_HEX_STATS.BLUE.shieldPerHex;
+    if (hex.color === "CYAN")
+      pickupRadiusBonus += BASE_HEX_STATS.CYAN.pickupRadiusPerHex;
+    if (hex.color === "ORANGE")
+      damageReduction += BASE_HEX_STATS.ORANGE.damageReductionPerHex;
   });
-  
-  return { 
-    maxHp, 
-    maxShield, 
-    pickupRadiusBonus, 
+
+  return {
+    maxHp,
+    maxShield,
+    pickupRadiusBonus,
     damageReduction,
   };
 };
@@ -110,11 +133,11 @@ const calculateStats = (ship: Record<string, HexModule>) => {
   let shieldRegenRate = 0;
   let hpRegenRate = 0;
   const activeUltimates: RingOfPerfectionType[] = [];
-  
+
   // Synergy calculations happen in MainScene/Player where we're guaranteed to be in browser
   // For now, return base stats - MainScene will update regen rates
-  
-  return { 
+
+  return {
     ...baseStats,
     shieldRegenRate,
     hpRegenRate,
@@ -124,7 +147,7 @@ const calculateStats = (ship: Record<string, HexModule>) => {
 
 // Calculate exp needed for next level
 const calculateExpToNextLevel = (level: number): number => {
-  return 10 + (level * 5); // Base 10, +5 per level
+  return 10 + level * 5; // Base 10, +5 per level
 };
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -162,14 +185,15 @@ export const useGameStore = create<GameState>((set, get) => ({
   bossPosition: null,
   showWinScreen: false,
   hasWon: false,
-  
+  joystickInput: null,
+
   // Initialize ship with core
   initializeShip: (coreColor: HexColor) => {
     const ship: Record<string, HexModule> = {
-      '0,0': { type: 'CORE', color: coreColor, health: 100 },
+      "0,0": { type: "CORE", color: coreColor, health: 100 },
     };
     const stats = calculateStats(ship);
-    
+
     set({
       ship,
       hp: stats.maxHp,
@@ -196,23 +220,23 @@ export const useGameStore = create<GameState>((set, get) => ({
       hasWon: false,
     });
   },
-  
+
   // Attach a new hex to the ship
   attachHex: (key: string, hex: HexModule) => {
     const newShip = { ...get().ship, [key]: hex };
     const stats = calculateStats(newShip);
-    
+
     // Heal for the HP difference when adding GREEN
     const hpDiff = stats.maxHp - get().maxHp;
-    
+
     // Auto-fill shield when adding BLUE hex (+10 shield)
     let newShield = get().shield;
-    if (hex.color === 'BLUE') {
+    if (hex.color === "BLUE") {
       newShield = Math.min(get().shield + 10, stats.maxShield);
     } else {
       newShield = Math.min(get().shield, stats.maxShield);
     }
-    
+
     set({
       ship: newShip,
       maxHp: stats.maxHp,
@@ -230,7 +254,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       isPaused: false, // Explicitly unpause when attaching hex
     });
   },
-  
+
   // Enter/exit construction mode (for boss drops - single hex, no choice)
   setConstructionMode: (isOpen: boolean, hex?: HexModule) => {
     set({
@@ -240,7 +264,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       isPaused: isOpen,
     });
   },
-  
+
   // Enter construction mode with choices (for level up)
   setConstructionModeWithChoices: (choices: HexModule[]) => {
     set({
@@ -250,7 +274,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       isPaused: true,
     });
   },
-  
+
   // Select a hex from the choices
   selectHexChoice: (index: number) => {
     const choices = get().pendingHexChoices;
@@ -261,11 +285,11 @@ export const useGameStore = create<GameState>((set, get) => ({
       });
     }
   },
-  
+
   // Take damage (shield first, then HP, with damage reduction only on HP)
   takeDamage: (amount: number) => {
     const { shield, hp, damageReduction } = get();
-    
+
     // Shield takes full damage (no reduction)
     if (shield >= amount) {
       set({ shield: shield - amount });
@@ -279,57 +303,63 @@ export const useGameStore = create<GameState>((set, get) => ({
       });
     }
   },
-  
+
   // Heal HP
   heal: (amount: number) => {
     const { hp, maxHp } = get();
     set({ hp: Math.min(hp + amount, maxHp) });
   },
-  
+
   // Regenerate shield
   regenShield: (amount: number) => {
     const { shield, maxShield } = get();
     set({ shield: Math.min(shield + amount, maxShield) });
   },
-  
+
   // Pause/unpause
   setPaused: (paused: boolean) => set({ isPaused: paused }),
-  
+
   // Toggle pause menu (ESC key)
   togglePauseMenu: () => {
     const { showPauseMenu, isConstructionMode } = get();
     // Don't toggle if in construction mode
     if (isConstructionMode) return;
-    
+
     const newShowPauseMenu = !showPauseMenu;
     set({
       showPauseMenu: newShowPauseMenu,
       isPaused: newShowPauseMenu,
     });
   },
-  
+
   // Close pause menu (resume game)
   closePauseMenu: () => set({ showPauseMenu: false, isPaused: false }),
-  
+
   // Set auth modal visibility
   setAuthModal: (show: boolean) => {
     const state = get();
-    set({ 
+    set({
       showAuthModal: show,
       // Only update isPaused if we're not already paused for another reason
       // When closing, only unpause if no other pause conditions exist
-      isPaused: show ? true : (state.showPauseMenu || state.isConstructionMode || state.showBossDialogue || state.showWinScreen || state.isDead)
+      isPaused: show
+        ? true
+        : state.showPauseMenu ||
+          state.isConstructionMode ||
+          state.showBossDialogue ||
+          state.showWinScreen ||
+          state.isDead,
     });
   },
-  
+
   // Add score
   addScore: (points: number) => set({ score: get().score + points }),
-  
+
   // Add experience
   addExp: (amount: number) => {
     const { exp, expToNextLevel, level } = get();
     const newExp = exp + amount;
-    
+
     if (newExp >= expToNextLevel) {
       // Level up!
       const remainingExp = newExp - expToNextLevel;
@@ -345,66 +375,85 @@ export const useGameStore = create<GameState>((set, get) => ({
       set({ exp: newExp });
     }
   },
-  
+
   // Level up - generate 3 random hex choices for player to pick from
   levelUp: () => {
-    const colors: HexColor[] = ['RED', 'GREEN', 'YELLOW', 'BLUE', 'CYAN', 'ORANGE'];
-    
+    const colors: HexColor[] = [
+      "RED",
+      "GREEN",
+      "YELLOW",
+      "BLUE",
+      "CYAN",
+      "ORANGE",
+    ];
+
     // Generate 3 unique random colors
     const shuffled = [...colors].sort(() => Math.random() - 0.5);
     const choices: HexModule[] = shuffled.slice(0, 3).map((color) => ({
-      type: 'MODULE' as HexType,
+      type: "MODULE" as HexType,
       color,
       health: 100,
     }));
-    
+
     get().setConstructionModeWithChoices(choices);
   },
-  
+
   // Next wave
   nextWave: () => set({ wave: get().wave + 1 }),
-  
+
   // Set boss health (null to hide)
-  setBossHealth: (hp: number | null, maxHp: number | null) => set({ bossHp: hp, bossMaxHp: maxHp }),
-  
+  setBossHealth: (hp: number | null, maxHp: number | null) =>
+    set({ bossHp: hp, bossMaxHp: maxHp }),
+
   // Set dead state
   setDead: (dead: boolean) => set({ isDead: dead, isPaused: dead }),
-  
+
   // Set wave announcement visibility
   setWaveAnnouncement: (show: boolean) => set({ showWaveAnnouncement: show }),
-  
+
   // Set boss dialogue visibility
-  setBossDialogue: (show: boolean, bossType?: BossShape, bossPos?: { x: number; y: number }) => {
+  setBossDialogue: (
+    show: boolean,
+    bossType?: BossShape,
+    bossPos?: { x: number; y: number },
+  ) => {
     set({
       showBossDialogue: show,
-      bossDialoguePhase: show ? 'pan_to_boss' : null,
+      bossDialoguePhase: show ? "pan_to_boss" : null,
       currentBossType: bossType || null,
       bossPosition: bossPos || null,
       isPaused: show,
     });
   },
-  
+
   // Set boss dialogue phase
-  setBossDialoguePhase: (phase: 'pan_to_boss' | 'boss_talking' | 'pan_to_player' | 'player_talking' | null) => {
+  setBossDialoguePhase: (
+    phase:
+      | "pan_to_boss"
+      | "boss_talking"
+      | "pan_to_player"
+      | "player_talking"
+      | null,
+  ) => {
     set({ bossDialoguePhase: phase });
     if (phase === null) {
       set({ showBossDialogue: false, isPaused: false });
     }
   },
-  
+
   // Called when a boss is defeated
   defeatBoss: (bossType?: string) => {
     const { bossNumber, hasWon } = get();
     const newBossesDefeated = get().bossesDefeated + 1;
-    
+
     // Check if this is the final boss (septagon, boss #5)
     // Require both bossNumber === 5 AND bossType === 'BOSS_SEPTAGON' for extra safety
-    const isFinalBoss = bossType === 'BOSS_SEPTAGON';
+    const isFinalBoss = bossType === "BOSS_SEPTAGON";
     const shouldShowWin = isFinalBoss && !hasWon;
-    
+
     // Cycle boss number (1-5)
     const newBossNumber = (bossNumber % 5) + 1;
-    
+
     set({
       bossesDefeated: newBossesDefeated,
       bossNumber: newBossNumber,
@@ -415,47 +464,56 @@ export const useGameStore = create<GameState>((set, get) => ({
       isPaused: shouldShowWin,
     });
   },
-  
+
   // Set win screen visibility
-  setWinScreen: (show: boolean) => set({ 
-    showWinScreen: show, 
-    isPaused: show,
-  }),
-  
+  setWinScreen: (show: boolean) =>
+    set({
+      showWinScreen: show,
+      isPaused: show,
+    }),
+
+  // Set joystick input (normalized -1 to 1 for x, y)
+  setJoystickInput: (x: number, y: number) => set({ joystickInput: { x, y } }),
+
+  // Clear joystick input
+  clearJoystickInput: () => set({ joystickInput: null }),
+
   // Reset game
-  reset: () => set({
-    ship: {},
-    hp: 100,
-    maxHp: 100,
-    shield: 0,
-    maxShield: 0,
-    level: 1,
-    exp: 0,
-    expToNextLevel: calculateExpToNextLevel(1),
-    pickupRadiusBonus: 0,
-    damageReduction: 0,
-    shieldRegenRate: 0,
-    hpRegenRate: 0,
-    activeUltimates: [],
-    isConstructionMode: false,
-    pendingHex: null,
-    pendingHexChoices: null,
-    isPaused: false,
-    showPauseMenu: false,
-    showAuthModal: false,
-    isDead: false,
-    showWaveAnnouncement: false,
-    score: 0,
-    wave: 1,
-    bossHp: null,
-    bossMaxHp: null,
-    bossNumber: 1,
-    bossesDefeated: 0,
-    showBossDialogue: false,
-    bossDialoguePhase: null,
-    currentBossType: null,
-    bossPosition: null,
-    showWinScreen: false,
-    hasWon: false,
-  }),
+  reset: () =>
+    set({
+      ship: {},
+      hp: 100,
+      maxHp: 100,
+      shield: 0,
+      maxShield: 0,
+      level: 1,
+      exp: 0,
+      expToNextLevel: calculateExpToNextLevel(1),
+      pickupRadiusBonus: 0,
+      damageReduction: 0,
+      shieldRegenRate: 0,
+      hpRegenRate: 0,
+      activeUltimates: [],
+      isConstructionMode: false,
+      pendingHex: null,
+      pendingHexChoices: null,
+      isPaused: false,
+      showPauseMenu: false,
+      showAuthModal: false,
+      isDead: false,
+      showWaveAnnouncement: false,
+      score: 0,
+      wave: 1,
+      bossHp: null,
+      bossMaxHp: null,
+      bossNumber: 1,
+      bossesDefeated: 0,
+      showBossDialogue: false,
+      bossDialoguePhase: null,
+      currentBossType: null,
+      bossPosition: null,
+      showWinScreen: false,
+      hasWon: false,
+      joystickInput: null,
+    }),
 }));
