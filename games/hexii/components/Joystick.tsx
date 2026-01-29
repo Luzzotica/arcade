@@ -144,7 +144,7 @@ export function Joystick() {
       setPosition(pos);
       const maxDistance = JOYSTICK_BASE_RADIUS - JOYSTICK_HANDLE_RADIUS;
       const normalizedX = pos.x / maxDistance;
-      const normalizedY = -pos.y / maxDistance; // Invert Y for intuitive control
+      const normalizedY = pos.y / maxDistance;
       setJoystickInput(normalizedX, normalizedY);
     },
     [isDragging, joystickCenter, getPositionFromEvent, setJoystickInput],
@@ -173,16 +173,8 @@ export function Joystick() {
     [clearJoystickInput],
   );
 
-  // Attach events to the React-rendered touch area element (like the working joystick)
+  // Attach move/end events to window for tracking outside the touch area
   useEffect(() => {
-    const touchArea = touchAreaRef.current;
-    if (!touchArea) return;
-
-    // Attach start events to the touch area element directly
-    touchArea.addEventListener("mousedown", handleStart);
-    touchArea.addEventListener("touchstart", handleStart, { passive: false });
-
-    // Attach move/end events to window for tracking outside the element
     window.addEventListener("mousemove", handleMove);
     window.addEventListener("touchmove", handleMove, { passive: false });
     window.addEventListener("mouseup", handleEnd);
@@ -190,15 +182,29 @@ export function Joystick() {
     window.addEventListener("touchcancel", handleEnd, { passive: false });
 
     return () => {
-      touchArea.removeEventListener("mousedown", handleStart);
-      touchArea.removeEventListener("touchstart", handleStart);
       window.removeEventListener("mousemove", handleMove);
       window.removeEventListener("touchmove", handleMove);
       window.removeEventListener("mouseup", handleEnd);
       window.removeEventListener("touchend", handleEnd);
       window.removeEventListener("touchcancel", handleEnd);
     };
-  }, [handleStart, handleMove, handleEnd]);
+  }, [handleMove, handleEnd]);
+
+  // React event handlers for start events (more reliable than addEventListener)
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      handleStart(e.nativeEvent);
+    },
+    [handleStart],
+  );
+
+  const onTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      e.preventDefault();
+      handleStart(e.nativeEvent);
+    },
+    [handleStart],
+  );
 
   if (!defaultPosition) return null;
 
@@ -206,19 +212,19 @@ export function Joystick() {
 
   return (
     <>
-      {/* Touch area covering bottom half of screen - React-rendered element */}
+      {/* Touch area covering bottom half of screen - high z-index to capture events above game canvas */}
       <div
         ref={touchAreaRef}
-        className="fixed bottom-0 left-0 right-0 z-[5] touch-none select-none"
+        onMouseDown={onMouseDown}
+        onTouchStart={onTouchStart}
+        className="fixed bottom-0 left-0 right-0 z-[10] touch-none select-none cursor-pointer"
         style={{
           height: "50%",
-          // Transparent but still captures touch events
-          backgroundColor: "transparent",
         }}
       />
 
       {/* Visual joystick layer - pointer-events-none so touches go through to touch area */}
-      <div className="fixed inset-0 z-[6] pointer-events-none">
+      <div className="fixed inset-0 z-[11] pointer-events-none">
         {/* Faint joystick outline when not active */}
         {!isDragging && !joystickCenter && (
           <>
