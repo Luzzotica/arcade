@@ -2,6 +2,14 @@
  * Utility to detect mobile devices and handle mobile-specific features
  */
 
+interface WindowWithOpera extends Window {
+  opera?: string;
+}
+
+interface DeviceOrientationEventWithPermission extends DeviceOrientationEvent {
+  requestPermission?: () => Promise<string>;
+}
+
 export function isMobileDevice(): boolean {
   if (typeof window === "undefined") return false;
 
@@ -12,8 +20,9 @@ export function isMobileDevice(): boolean {
   }
 
   // Production: Check user agent
+  const windowWithOpera = window as WindowWithOpera;
   const userAgent =
-    navigator.userAgent || navigator.vendor || (window as any).opera;
+    navigator.userAgent || navigator.vendor || windowWithOpera.opera || "";
   const mobileRegex =
     /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
 
@@ -35,7 +44,8 @@ export function requestDeviceOrientationPermission(): Promise<boolean> {
     }
 
     // Type assertion for iOS 13+ requestPermission API
-    const DeviceOrientationEventAny = DeviceOrientationEvent as any;
+    const DeviceOrientationEventAny =
+      DeviceOrientationEvent as unknown as DeviceOrientationEventWithPermission;
 
     if (!DeviceOrientationEventAny.requestPermission) {
       // Not iOS 13+, permission not needed
