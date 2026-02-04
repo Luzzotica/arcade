@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "client", "server",
+    "spacetime_physics",
+]
+resolver = "3"

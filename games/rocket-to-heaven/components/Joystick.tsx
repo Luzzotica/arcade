@@ -1,0 +1,290 @@
+"use client";
+
+import { useRef, useEffect, useState, useCallback } from "react";
+import { useGameStore } from "../store/gameStore";
+
+const JOYSTICK_BASE_RADIUS = 60;
+const JOYSTICK_HANDLE_RADIUS = 25;
+const JOYSTICK_SIZE = JOYSTICK_BASE_RADIUS * 2;
+
+export function Joystick() {
+  const touchAreaRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [joystickCenter, setJoystickCenter] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const activeTouchIdRef = useRef<number | null>(null);
+  const setJoystickInput = useGameStore((state) => state.setJoystickInput);
+  const clearJoystickInput = useGameStore((state) => state.clearJoystickInput);
+
+  // Calculate default position for inactive joystick
+  const [defaultPosition, setDefaultPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const updatePosition = () => {
+      setDefaultPosition({
+        x: window.innerWidth / 4, // Left quarter of screen
+        y: window.innerHeight - JOYSTICK_BASE_RADIUS - 80,
+      });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    return () => window.removeEventListener("resize", updatePosition);
+  }, []);
+
+  const getPositionFromEvent = useCallback(
+    (
+      e: TouchEvent | MouseEvent,
+      touchId?: number | null,
+      center?: { x: number; y: number },
+    ) => {
+      if (!center) return { x: 0, y: 0 };
+
+      let clientX: number;
+      let clientY: number;
+
+      if ("touches" in e) {
+        const targetTouchId = touchId ?? activeTouchIdRef.current;
+        let touch: Touch | undefined;
+
+        if (
+          targetTouchId !== null &&
+          targetTouchId !== undefined &&
+          targetTouchId !== -1
+        ) {
+          touch = Array.from(e.touches).find(
+            (t) => t.identifier === targetTouchId,
+          );
+        }
+
+        if (!touch && e.touches.length > 0) {
+          touch = e.touches[0];
+        }
+
+        if (!touch) return { x: 0, y: 0 };
+
+        clientX = touch.clientX;
+        clientY = touch.clientY;
+      } else {
+        const mouseEvent = e as MouseEvent;
+        clientX = mouseEvent.clientX;
+        clientY = mouseEvent.clientY;
+      }
+
+      let x = clientX - center.x;
+      let y = clientY - center.y;
+
+      const maxDistance = JOYSTICK_BASE_RADIUS - JOYSTICK_HANDLE_RADIUS;
+      const distance = Math.sqrt(x * x + y * y);
+
+      if (distance > maxDistance) {
+        x = (x / distance) * maxDistance;
+        y = (y / distance) * maxDistance;
+      }
+
+      return { x, y };
+    },
+    [],
+  );
+
+  const handleStart = useCallback(
+    (e: TouchEvent | MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      let clientX: number;
+      let clientY: number;
+      let touchId: number | null = null;
+
+      if ("touches" in e && e.changedTouches.length > 0) {
+        const touch = e.changedTouches[0];
+        clientX = touch.clientX;
+        clientY = touch.clientY;
+        touchId = touch.identifier;
+        activeTouchIdRef.current = touchId;
+      } else {
+        const mouseEvent = e as MouseEvent;
+        clientX = mouseEvent.clientX;
+        clientY = mouseEvent.clientY;
+        activeTouchIdRef.current = -1;
+      }
+
+      setJoystickCenter({ x: clientX, y: clientY });
+      setIsDragging(true);
+      setPosition({ x: 0, y: 0 });
+      clearJoystickInput();
+    },
+    [clearJoystickInput],
+  );
+
+  const handleMove = useCallback(
+    (e: TouchEvent | MouseEvent) => {
+      if (!isDragging || !joystickCenter) return;
+      if (activeTouchIdRef.current === null) return;
+
+      if ("touches" in e) {
+        const ourTouch = Array.from(e.touches).find(
+          (touch) => touch.identifier === activeTouchIdRef.current,
+        );
+        if (!ourTouch) return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+      const pos = getPositionFromEvent(
+        e,
+        activeTouchIdRef.current,
+        joystickCenter,
+      );
+      setPosition(pos);
+      const maxDistance = JOYSTICK_BASE_RADIUS - JOYSTICK_HANDLE_RADIUS;
+      const normalizedX = pos.x / maxDistance;
+      // Only use horizontal for this game (no Y movement needed)
+      setJoystickInput(normalizedX, 0);
+    },
+    [isDragging, joystickCenter, getPositionFromEvent, setJoystickInput],
+  );
+
+  const handleEnd = useCallback(
+    (e?: TouchEvent | MouseEvent) => {
+      if (e && "changedTouches" in e) {
+        const touchEvent = e as TouchEvent;
+        if (activeTouchIdRef.current === null) return;
+
+        const ourTouch = Array.from(touchEvent.changedTouches).find(
+          (touch) => touch.identifier === activeTouchIdRef.current,
+        );
+        if (!ourTouch) return;
+      }
+
+      if (activeTouchIdRef.current === null) return;
+
+      setIsDragging(false);
+      setPosition({ x: 0, y: 0 });
+      setJoystickCenter(null);
+      activeTouchIdRef.current = null;
+      clearJoystickInput();
+    },
+    [clearJoystickInput],
+  );
+
+  // Attach move/end events to window for tracking outside the touch area
+  useEffect(() => {
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("touchmove", handleMove, { passive: false });
+    window.addEventListener("mouseup", handleEnd);
+    window.addEventListener("touchend", handleEnd, { passive: false });
+    window.addEventListener("touchcancel", handleEnd, { passive: false });
+
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("touchmove", handleMove);
+      window.removeEventListener("mouseup", handleEnd);
+      window.removeEventListener("touchend", handleEnd);
+      window.removeEventListener("touchcancel", handleEnd);
+    };
+  }, [handleMove, handleEnd]);
+
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      handleStart(e.nativeEvent);
+    },
+    [handleStart],
+  );
+
+  const onTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      e.preventDefault();
+      handleStart(e.nativeEvent);
+    },
+    [handleStart],
+  );
+
+  if (!defaultPosition) return null;
+
+  const currentCenter = joystickCenter || defaultPosition;
+
+  return (
+    <>
+      {/* Touch area covering left half of screen */}
+      <div
+        ref={touchAreaRef}
+        onMouseDown={onMouseDown}
+        onTouchStart={onTouchStart}
+        className="fixed bottom-0 left-0 z-[10] touch-none select-none cursor-pointer"
+        style={{
+          width: "50%",
+          height: "50%",
+        }}
+      />
+
+      {/* Visual joystick layer */}
+      <div className="fixed inset-0 z-[11] pointer-events-none">
+        {/* Faint joystick outline when not active */}
+        {!isDragging && !joystickCenter && (
+          <>
+            <div
+              className="absolute rounded-full border border-amber-200/20 bg-black/10 backdrop-blur-sm"
+              style={{
+                left: `${defaultPosition.x}px`,
+                top: `${defaultPosition.y}px`,
+                width: `${JOYSTICK_SIZE}px`,
+                height: `${JOYSTICK_SIZE}px`,
+                transform: "translate(-50%, -50%)",
+                boxShadow: "0 0 10px rgba(255, 215, 0, 0.1)",
+              }}
+            />
+            <div
+              className="absolute rounded-full border border-amber-200/20 bg-amber-200/10"
+              style={{
+                left: `${defaultPosition.x}px`,
+                top: `${defaultPosition.y}px`,
+                width: `${JOYSTICK_HANDLE_RADIUS * 2}px`,
+                height: `${JOYSTICK_HANDLE_RADIUS * 2}px`,
+                transform: "translate(-50%, -50%)",
+                boxShadow: "0 0 8px rgba(255, 215, 0, 0.1)",
+              }}
+            />
+          </>
+        )}
+
+        {/* Active joystick */}
+        {joystickCenter && (
+          <div
+            className="absolute rounded-full border-2 border-amber-300/50 bg-black/30 backdrop-blur-sm"
+            style={{
+              left: `${currentCenter.x}px`,
+              top: `${currentCenter.y}px`,
+              width: `${JOYSTICK_SIZE}px`,
+              height: `${JOYSTICK_SIZE}px`,
+              transform: "translate(-50%, -50%)",
+              boxShadow: isDragging
+                ? "0 0 20px rgba(255, 215, 0, 0.3)"
+                : "0 0 10px rgba(255, 215, 0, 0.1)",
+            }}
+          >
+            <div
+              className="absolute rounded-full bg-gradient-to-br from-amber-300 to-amber-500 border-2 border-amber-200 transition-all duration-75"
+              style={{
+                width: `${JOYSTICK_HANDLE_RADIUS * 2}px`,
+                height: `${JOYSTICK_HANDLE_RADIUS * 2}px`,
+                left: "50%",
+                top: "50%",
+                transform: `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px))`,
+                boxShadow: isDragging
+                  ? "0 0 15px rgba(255, 215, 0, 0.5)"
+                  : "0 0 8px rgba(255, 215, 0, 0.3)",
+              }}
+            />
+          </div>
+        )}
+      </div>
+    </>
+  );
+}

@@ -13,6 +13,7 @@ import { WinScreen } from "./WinScreen";
 import { Joystick } from "./Joystick";
 import { useGameStore } from "../store/gameStore";
 import { audioManager } from "../game/audio/AudioManager";
+import { musicManager } from "@/lib/audio/MusicManager";
 import { useGameSession } from "@/lib/supabase/hooks";
 import { isMobileDevice } from "@/lib/utils/mobile-detector";
 
@@ -72,6 +73,9 @@ export function Game({ onReturnToMenu }: GameProps) {
       parent: containerRef.current,
     });
 
+    // Start gameplay music
+    musicManager.play("/music/gameplay.mp3");
+
     // Handle window resize
     const handleResize = () => {
       if (gameRef.current) {
@@ -122,7 +126,7 @@ export function Game({ onReturnToMenu }: GameProps) {
     if (showBossDialogue && !prevShowBossDialogue.current) {
       // Boss dialogue started - play boss appear SFX and switch to boss music
       audioManager.playSFX("boss-appear");
-      audioManager.crossfadeTo("boss");
+      musicManager.play("/music/boss-theme.mp3");
     }
     prevShowBossDialogue.current = showBossDialogue;
   }, [showBossDialogue]);
@@ -138,7 +142,7 @@ export function Game({ onReturnToMenu }: GameProps) {
       !isDead
     ) {
       audioManager.playSFX("boss-death");
-      audioManager.crossfadeTo("gameplay");
+      musicManager.play("/music/gameplay.mp3");
     }
     prevBossHp.current = bossHp;
   }, [bossHp, isDead]);
@@ -148,7 +152,7 @@ export function Game({ onReturnToMenu }: GameProps) {
   useEffect(() => {
     if (isDead && !prevIsDead.current) {
       // Player just died - switch to defeat music (death SFX is played in MainScene during animation)
-      audioManager.crossfadeTo("defeat");
+      musicManager.play("/music/defeat.mp3");
     }
     prevIsDead.current = isDead;
   }, [isDead]);

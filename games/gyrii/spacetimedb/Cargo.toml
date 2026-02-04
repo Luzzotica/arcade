@@ -1,0 +1,15 @@
+[package]
+name = "gyrii-server"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+spacetimedb = { version = "1.*", features = ["unstable"] }
+spacetime_rapier = { path = "./spacetime_rapier", features = ["dim3"] }
+log = "0.4"
+
+[profile.release]
+opt-level = "s"

@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { UserMenu } from "@/components/auth/UserMenu";
 import { usePresence } from "@/lib/supabase/hooks";
 import { isMobileDevice } from "@/lib/utils/mobile-detector";
+import { musicManager } from "@/lib/audio/MusicManager";
 
 interface Game {
   id: string;
@@ -12,6 +14,8 @@ interface Game {
   description: string;
   color: string;
   mobileFriendly: boolean;
+  icon?: string; // emoji or character
+  image?: string; // path to image in public folder
 }
 
 const games: Game[] = [
@@ -22,9 +26,24 @@ const games: Game[] = [
       "Prove that Hexagons are the Bestagons. Build your hex cluster and defeat the evil Septagon!",
     color: "#3742fa",
     mobileFriendly: true,
+    icon: "⬡",
   },
-  // Add more games here in the future
+  {
+    id: "rocket-to-heaven",
+    name: "Rocket to Heaven",
+    description:
+      "Turn life's burdens into stepping stones. Escape the rising lava of Despair and reach Heaven at 10,000 feet.",
+    color: "#ffd700",
+    mobileFriendly: true,
+    image: "/RocketToHeaven.png",
+  },
 ];
+
+// Map game IDs to their menu music paths
+const gameMenuMusic: Record<string, string> = {
+  hexii: "/music/title-theme.mp3",
+  "rocket-to-heaven": "/music/rocket-to-heaven/menu.mp3",
+};
 
 interface HexPosition {
   left: number;
@@ -75,6 +94,9 @@ export default function ArcadePage() {
     fetchAnalytics();
   }, []);
 
+  // No cleanup needed - destination pages handle their own music cleanup
+  // Removing arcade cleanup prevents music from being stopped during navigation
+
   // Sort games: mobile-friendly first on mobile devices
   const sortedGames = [...games].sort((a, b) => {
     if (isMobile) {
@@ -112,48 +134,80 @@ export default function ArcadePage() {
           Select a game to play
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-15">
-          {sortedGames.map((game) => (
-            <Link
-              key={game.id}
-              href={`/arcade/${game.id}`}
-              className="bg-white/5 border-2 border-white/10 rounded-2xl p-8 md:p-10 no-underline text-inherit transition-all hover:bg-white/10 hover:border-white/30 hover:-translate-y-2 hover:shadow-[0_20px_60px_rgba(0,0,0,0.4)] flex flex-col items-center text-center relative"
-            >
-              {/* Mobile Friendly Tag */}
-              {game.mobileFriendly && (
-                <div className="absolute bottom-4 left-4 px-2.5 py-1 bg-[#2ed573]/20 border border-[#2ed573]/40 rounded-full flex items-center">
-                  <span className="font-orbitron text-[10px] text-[#2ed573] uppercase tracking-[1px]">
-                    📱 Mobile
-                  </span>
+          {sortedGames.map((game) => {
+            const menuMusic = gameMenuMusic[game.id];
+            const handleClick = () => {
+              console.log("[Arcade] Card clicked:", {
+                gameId: game.id,
+                gameName: game.name,
+                menuMusic,
+                hasMenuMusic: !!menuMusic,
+              });
+              if (menuMusic) {
+                console.log("[Arcade] Calling musicManager.play():", menuMusic);
+                musicManager.play(menuMusic);
+              } else {
+                console.log(
+                  "[Arcade] No menu music configured for game:",
+                  game.id,
+                );
+              }
+            };
+
+            return (
+              <Link
+                key={game.id}
+                href={`/arcade/${game.id}`}
+                onClick={handleClick}
+                className="bg-white/5 border-2 border-white/10 rounded-2xl p-8 md:p-10 no-underline text-inherit transition-all hover:bg-white/10 hover:border-white/30 hover:-translate-y-2 hover:shadow-[0_20px_60px_rgba(0,0,0,0.4)] flex flex-col items-center text-center relative"
+              >
+                {/* Mobile Friendly Tag */}
+                {game.mobileFriendly && (
+                  <div className="absolute bottom-4 left-4 px-2.5 py-1 bg-[#2ed573]/20 border border-[#2ed573]/40 rounded-full flex items-center">
+                    <span className="font-orbitron text-[10px] text-[#2ed573] uppercase tracking-[1px]">
+                      📱 Mobile
+                    </span>
+                  </div>
+                )}
+                <div className="mb-6 drop-shadow-[0_0_20px_rgba(100,100,255,0.5)]">
+                  {game.image ? (
+                    <Image
+                      src={game.image}
+                      alt={game.name}
+                      width={80}
+                      height={80}
+                      className="object-contain"
+                    />
+                  ) : (
+                    <span className="text-6xl">{game.icon || "⬡"}</span>
+                  )}
                 </div>
-              )}
-              <div className="text-6xl mb-6 drop-shadow-[0_0_20px_rgba(100,100,255,0.5)]">
-                ⬡
-              </div>
-              <h2 className="font-orbitron text-2xl md:text-3xl font-bold tracking-[4px] mb-4 text-white">
-                {game.name}
-              </h2>
-              <p className="font-orbitron text-sm text-white/60 leading-relaxed mb-6 flex-grow">
-                {game.description}
-              </p>
-              <div className="flex flex-col items-center gap-1.5 mt-auto mb-4 min-h-[40px]">
-                {playersInGame.get(game.id) ? (
-                  <span className="text-[13px] text-[#2ed573] flex items-center gap-1.5 font-medium">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#2ed573] shadow-[0_0_6px_#2ed573] animate-pulse" />
-                    {playersInGame.get(game.id)} playing now
-                  </span>
-                ) : null}
-                {gameAnalytics[game.id]?.total_sessions ? (
-                  <span className="text-xs text-white/40">
-                    {gameAnalytics[game.id].total_sessions.toLocaleString()}{" "}
-                    total plays
-                  </span>
-                ) : null}
-              </div>
-              <div className="font-orbitron text-base font-bold tracking-[2px] text-white/80 transition-all group-hover:text-white group-hover:translate-x-1">
-                Play →
-              </div>
-            </Link>
-          ))}
+                <h2 className="font-orbitron text-2xl md:text-3xl font-bold tracking-[4px] mb-4 text-white">
+                  {game.name}
+                </h2>
+                <p className="font-orbitron text-sm text-white/60 leading-relaxed mb-6 flex-grow">
+                  {game.description}
+                </p>
+                <div className="flex flex-col items-center gap-1.5 mt-auto mb-4 min-h-[40px]">
+                  {playersInGame.get(game.id) ? (
+                    <span className="text-[13px] text-[#2ed573] flex items-center gap-1.5 font-medium">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#2ed573] shadow-[0_0_6px_#2ed573] animate-pulse" />
+                      {playersInGame.get(game.id)} playing now
+                    </span>
+                  ) : null}
+                  {gameAnalytics[game.id]?.total_sessions ? (
+                    <span className="text-xs text-white/40">
+                      {gameAnalytics[game.id].total_sessions.toLocaleString()}{" "}
+                      total plays
+                    </span>
+                  ) : null}
+                </div>
+                <div className="font-orbitron text-base font-bold tracking-[2px] text-white/80 transition-all group-hover:text-white group-hover:translate-x-1">
+                  Play →
+                </div>
+              </Link>
+            );
+          })}
         </div>
       </div>
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">

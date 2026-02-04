@@ -1,0 +1,27 @@
+[package]
+name = "spacetime_rapier"
+version = "0.1.0"
+edition = "2021"
+description = "Rapier physics engine integration for SpacetimeDB - supports both 2D and 3D"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["rlib"]
+
+[features]
+default = ["dim3"]
+dim2 = ["dep:rapier2d"]
+dim3 = ["dep:rapier3d"]
+
+[dependencies]
+spacetimedb = { version = "1.*", features = ["unstable"] }
+bon = "3.6"
+log = "0.4"
+nalgebra = "0.33"
+
+# Optional physics engines based on feature
+rapier2d = { version = "0.22", optional = true }
+rapier3d = { version = "0.22", optional = true }
+
+[dev-dependencies]
+# For testing
