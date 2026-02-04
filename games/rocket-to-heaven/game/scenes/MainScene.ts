@@ -25,7 +25,7 @@ export class MainScene extends Phaser.Scene {
   private gameTime: number = 0;
   private lavaStarted: boolean = false;
   private jesusPlatform?: Phaser.GameObjects.Container;
-  private jesusSprite?: Phaser.GameObjects.Sprite;
+  private jesusSprite?: Phaser.GameObjects.Image;
 
   constructor() {
     super({ key: "MainScene" });

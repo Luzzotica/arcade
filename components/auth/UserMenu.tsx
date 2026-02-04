@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { createClient } from '@/lib/supabase/client';
 import { AuthModal } from './AuthModal';
@@ -98,7 +99,7 @@ export function UserMenu() {
         onClick={() => setShowDropdown(!showDropdown)}
       >
         {avatarUrl ? (
-          <img src={avatarUrl} alt="" className="w-7 h-7 rounded-full object-cover" />
+          <Image src={avatarUrl} alt="" width={28} height={28} className="w-7 h-7 rounded-full object-cover" unoptimized />
         ) : (
           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#3742fa] to-[#5a67fa] flex items-center justify-center text-sm font-semibold">
             {shownName.charAt(0).toUpperCase()}

@@ -46,7 +46,14 @@ export function useHighScores(gameId: string) {
 
       try {
         // Build the request body, only including optional fields if they're defined
-        const requestBody: any = {
+        const requestBody: {
+          game_id: string;
+          score: number;
+          play_time_seconds: number;
+          wave?: number;
+          level?: number;
+          session_id?: string;
+        } = {
           game_id: gameId,
           score,
           play_time_seconds: playTimeSeconds || 0,
