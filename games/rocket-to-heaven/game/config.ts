@@ -78,7 +78,7 @@ export const GAME_CONSTANTS = {
   // Abyss/Lava
   ABYSS_START_DELAY: 5000, // ms before lava starts rising
   ABYSS_START_Y: 400, // Initial abyss position (well below screen)
-  ABYSS_RISE_SPEED: 40, // Pixels per second the lava rises
+  ABYSS_RISE_SPEED: 20, // Pixels per second the lava rises
   ABYSS_RISE_ACCELERATION: 0.05, // Speed increase per second
 
   // Starting platform

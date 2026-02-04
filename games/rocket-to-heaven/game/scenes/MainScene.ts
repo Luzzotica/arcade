@@ -778,17 +778,17 @@ export class MainScene extends Phaser.Scene {
     g.clear();
 
     // Fill left side (from screen edge to playable area) - extends far up and down
-    g.fillStyle(0x2a2a2a, 1);
-    g.fillRect(0, topY, playableAreaX, wallHeight);
+    // g.fillStyle(0x2a2a2a, 1);
+    // g.fillRect(0, topY, playableAreaX, wallHeight);
 
-    // Fill right side (from playable area end to screen edge) - extends far up and down
-    g.fillStyle(0x2a2a2a, 1);
-    g.fillRect(
-      playableAreaX + GAME_WIDTH,
-      topY,
-      screenWidth - (playableAreaX + GAME_WIDTH),
-      wallHeight,
-    );
+    // // Fill right side (from playable area end to screen edge) - extends far up and down
+    // g.fillStyle(0x2a2a2a, 1);
+    // g.fillRect(
+    //   playableAreaX + GAME_WIDTH,
+    //   topY,
+    //   screenWidth - (playableAreaX + GAME_WIDTH),
+    //   wallHeight,
+    // );
 
     // Left edge highlight (at playable area boundary) - extends far up and down
     g.fillStyle(0x4a4a4a, 1);

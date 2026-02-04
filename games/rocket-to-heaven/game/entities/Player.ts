@@ -85,10 +85,20 @@ export class Player extends Phaser.GameObjects.Container {
     }
 
     // Rocket attachment (on the back)
+    // Draw rocket attachment based on customizable (rocketX, rocketY) variables
+    const rocketX = -20;
+    const rocketY = -30;
     g.fillStyle(0x888888, 1);
-    g.fillRect(-20, -10, 8, 20);
+    g.fillRect(rocketX, rocketY, 8, 20);
     g.fillStyle(0xff4444, 1);
-    g.fillTriangle(-20, 10, -16, 20, -12, 10);
+    g.fillTriangle(
+      rocketX,
+      rocketY + 20,
+      rocketX + 4,
+      rocketY + 30,
+      rocketX + 8,
+      rocketY + 20,
+    );
 
     // Person silhouette (simplified)
     g.fillStyle(COLORS.PLAYER, 0.9);
@@ -99,13 +109,29 @@ export class Player extends Phaser.GameObjects.Container {
     const g = this.rocketFlame;
     g.clear();
 
-    // Draw flame (pointing down from rocket)
+    // Draw flame (pointing down from rocket), based on rocketX = -20, rocketY = -30
+    const rocketX = -20;
+    const rocketY = -40;
     g.fillStyle(COLORS.ROCKET_FLAME, 0.9);
-    g.fillTriangle(-18, 15, -14, 35, -10, 15);
+    g.fillTriangle(
+      rocketX - 2,
+      rocketY + 35, // left base
+      rocketX + 4,
+      rocketY + 55, // tip (bottom)
+      rocketX + 8,
+      rocketY + 35, // right base
+    );
 
     // Inner flame
     g.fillStyle(0xffff00, 0.8);
-    g.fillTriangle(-17, 15, -14, 28, -11, 15);
+    g.fillTriangle(
+      rocketX - 1,
+      rocketY + 38, // left base (inner)
+      rocketX + 4,
+      rocketY + 48, // tip (inner)
+      rocketX + 7,
+      rocketY + 38, // right base (inner)
+    );
   }
 
   private createFlameParticles(): void {
