@@ -20,6 +20,14 @@ export class Player extends Phaser.GameObjects.Container {
   private flameParticles: Phaser.GameObjects.Particles.ParticleEmitter | null =
     null;
   private victoryTriggered: boolean = false; // Track if victory was already triggered
+  // Input - don't capture to allow typing in input fields
+  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private keys!: {
+    a: Phaser.Input.Keyboard.Key;
+    d: Phaser.Input.Keyboard.Key;
+    w: Phaser.Input.Keyboard.Key;
+    space: Phaser.Input.Keyboard.Key;
+  };
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y);
@@ -50,6 +58,18 @@ export class Player extends Phaser.GameObjects.Container {
     );
     this.body.setCollideWorldBounds(false);
     this.body.setMaxVelocity(400, 600);
+
+    // Set up keyboard controls - don't capture to allow typing in input fields
+    this.cursors = scene.input.keyboard!.createCursorKeys();
+    this.keys = {
+      a: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A, false),
+      d: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D, false),
+      w: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W, false),
+      space: scene.input.keyboard!.addKey(
+        Phaser.Input.Keyboard.KeyCodes.SPACE,
+        false,
+      ),
+    };
 
     // Create flame particle emitter
     this.createFlameParticles();
@@ -157,6 +177,20 @@ export class Player extends Phaser.GameObjects.Container {
     this.flameParticles.setDepth(this.depth - 1);
   }
 
+  /**
+   * Check if an input element is currently focused
+   */
+  private isInputFocused(): boolean {
+    const activeElement = document.activeElement;
+    if (!activeElement) return false;
+    const tagName = activeElement.tagName.toLowerCase();
+    return (
+      tagName === "input" ||
+      tagName === "textarea" ||
+      activeElement.getAttribute("contenteditable") === "true"
+    );
+  }
+
   public update(delta: number): void {
     if (this.playerState === "dead") return;
 
@@ -167,35 +201,29 @@ export class Player extends Phaser.GameObjects.Container {
       store.setNearMissBoost(false);
     }
 
-    // Get input
-    const cursors = this.scene.input.keyboard?.createCursorKeys();
-    const keys = this.scene.input.keyboard?.addKeys({
-      a: Phaser.Input.Keyboard.KeyCodes.A,
-      d: Phaser.Input.Keyboard.KeyCodes.D,
-      w: Phaser.Input.Keyboard.KeyCodes.W,
-      space: Phaser.Input.Keyboard.KeyCodes.SPACE,
-    }) as {
-      a: Phaser.Input.Keyboard.Key;
-      d: Phaser.Input.Keyboard.Key;
-      w: Phaser.Input.Keyboard.Key;
-      space: Phaser.Input.Keyboard.Key;
-    };
+    // Check if user is typing in an input field - skip game input processing
+    const isTyping = this.isInputFocused();
 
     // Movement input (keyboard or joystick)
     let moveX = 0;
-    if (cursors?.left.isDown || keys?.a.isDown) moveX -= 1;
-    if (cursors?.right.isDown || keys?.d.isDown) moveX += 1;
 
-    // Joystick input (mobile)
+    // Skip keyboard input processing if user is typing in an input field
+    if (!isTyping) {
+      if (this.cursors.left.isDown || this.keys.a.isDown) moveX -= 1;
+      if (this.cursors.right.isDown || this.keys.d.isDown) moveX += 1;
+    }
+
+    // Joystick input (mobile) - always allow joystick input
     if (store.joystickInput) {
       moveX = store.joystickInput.x;
     }
 
-    // Jump input
+    // Jump input - skip keyboard input if typing
     const jumpPressed =
-      cursors?.up.isDown ||
-      keys?.space.isDown ||
-      keys?.w.isDown ||
+      (!isTyping &&
+        (this.cursors.up.isDown ||
+          this.keys.space.isDown ||
+          this.keys.w.isDown)) ||
       store.jumpPressed;
 
     // Update jump cooldown
