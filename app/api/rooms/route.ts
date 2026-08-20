@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth, recordUsage, corsHeaders as CORS, corsPreflight } from "@/lib/api/auth";
+import { projectKeyIds } from "@/lib/api/roomScope";
 import { hashPassword } from "@/lib/api/crypto";
 import { generateTurnCredentials, mintCloudflareIceServers, stunOnlyIceServers } from "@/lib/api/turn";
 import { relayCapStatus } from "@/lib/billing/relayCap";
@@ -8,6 +9,25 @@ import { mintRoomToken } from "@/lib/api/roomToken";
 import { enforceRoomCreateQuota } from "@/lib/api/quota";
 
 const admin = createAdminClient();
+
+/** Max time room create will wait on opportunistic cleanup. Client RoomService
+ *  aborts at 8s; an unbounded cleanup_room_data() (signal purge + expire + delete)
+ *  under load was the main intermittent create-timeout source. Cron still runs
+ *  the full sweep; this is best-effort only. */
+const CREATE_CLEANUP_BUDGET_MS = 1_500;
+
+async function cleanupRoomsBudgeted(): Promise<void> {
+  try {
+    await Promise.race([
+      admin.rpc("cleanup_room_data").then(({ error }) => {
+        if (error) console.warn("[rooms] cleanup_room_data:", error.message);
+      }),
+      new Promise<void>((resolve) => setTimeout(resolve, CREATE_CLEANUP_BUDGET_MS)),
+    ]);
+  } catch (err) {
+    console.warn("[rooms] cleanup_room_data failed:", err);
+  }
+}
 
 export async function OPTIONS() {
   return corsPreflight();
@@ -29,7 +49,7 @@ export async function GET(request: Request) {
     .select(
       "id, join_code, game_id, display_name, status, max_peers, is_password_protected, visibility, joinable, metadata, created_at, expires_at",
     )
-    .eq("api_key_id", auth.ctx.apiKeyId)
+    .in("api_key_id", await projectKeyIds(auth.ctx))
     .eq("visibility", "public")
     .eq("joinable", true)
     .in("status", ["waiting", "active"])
@@ -87,7 +107,8 @@ export async function POST(request: Request) {
   // non-ended rooms, so running cleanup only after a successful create used to
   // deadlock: 50 stale rooms → every create 429s → the post-create sweep never
   // runs. (The daily cron is too coarse for a 2h room TTL.)
-  await admin.rpc("cleanup_room_data");
+  // Budgeted: never block create past CREATE_CLEANUP_BUDGET_MS (see above).
+  await cleanupRoomsBudgeted();
 
   const overQuota = await enforceRoomCreateQuota(admin, auth.ctx.projectId, auth.ctx.apiKeyId);
   if (overQuota) return overQuota;
@@ -190,6 +211,8 @@ export async function POST(request: Request) {
   const turn = generateTurnCredentials(auth.ctx.apiKeyId, hostPeer.id, auth.ctx.playerId);
   // Free-tier relay cap: past the monthly included GB we stop minting relay
   // creds (STUN/direct still works). Pro is metered, never capped.
+  // Cap check + CF mint are sequential only when uncapped; CF has its own 2s
+  // abort so create can't hang on the TURN API.
   const { data: projRow } = await admin
     .from("projects")
     .select("id, plan, relay_included_gb")

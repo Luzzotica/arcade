@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth, corsHeaders as CORS, corsPreflight } from "@/lib/api/auth";
+import { projectKeyIds } from "@/lib/api/roomScope";
 
 const admin = createAdminClient();
 
@@ -31,7 +32,9 @@ export async function GET(request: Request) {
       "id, join_code, game_id, display_name, status, max_peers, is_password_protected, visibility, joinable, metadata, created_at, expires_at",
     )
     .eq("join_code", code)
-    .eq("api_key_id", auth.ctx.apiKeyId)
+    // Project-scoped: rooms created by ANY key of this project resolve
+    // (dev/prod builds, rotated keys). Exact-key scoping 404'd real rooms.
+    .in("api_key_id", await projectKeyIds(auth.ctx))
     .neq("status", "ended")
     .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: CORS });

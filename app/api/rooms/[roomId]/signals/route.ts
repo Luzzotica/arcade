@@ -1,6 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth, recordUsage, corsHeaders as CORS, corsPreflight } from "@/lib/api/auth";
+import { roomVisible } from "@/lib/api/roomScope";
 import { rateLimit, tooManyRequests } from "@/lib/api/quota";
 
 const admin = createAdminClient();
@@ -9,14 +10,14 @@ export async function OPTIONS() {
   return corsPreflight();
 }
 
-async function assertRoomOwned(roomId: string, apiKeyId: string) {
+async function assertRoomOwned(roomId: string, ctx: { apiKeyId: string; projectId: string }) {
   const { data } = await admin
     .from("rooms")
-    .select("id, host_secret")
+    .select("id, host_secret, api_key_id")
     .eq("id", roomId)
-    .eq("api_key_id", apiKeyId)
     .maybeSingle();
-  return data ?? null;
+  if (!data || !(await roomVisible(data.api_key_id, ctx))) return null;
+  return data;
 }
 
 // GET /api/rooms/[roomId]/signals?recipient_peer_id=X&since_id=Y&limit=Z
@@ -28,7 +29,7 @@ export async function GET(
   const auth = await requireAuth(request);
   if (!auth.ok) return auth.response;
   const { roomId } = await params;
-  if (!(await assertRoomOwned(roomId, auth.ctx.apiKeyId))) {
+  if (!(await assertRoomOwned(roomId, auth.ctx))) {
     return NextResponse.json({ error: "Room not found" }, { status: 404, headers: CORS });
   }
 
@@ -87,7 +88,7 @@ export async function POST(
   }
 
   const { roomId } = await params;
-  const room = await assertRoomOwned(roomId, auth.ctx.apiKeyId);
+  const room = await assertRoomOwned(roomId, auth.ctx);
   if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404, headers: CORS });
 
   let body: {

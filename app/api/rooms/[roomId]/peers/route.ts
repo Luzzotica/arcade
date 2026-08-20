@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth, recordUsage, corsHeaders as CORS, corsPreflight } from "@/lib/api/auth";
+import { roomVisible } from "@/lib/api/roomScope";
 import { verifyPassword } from "@/lib/api/crypto";
 import { generateTurnCredentials, mintCloudflareIceServers, stunOnlyIceServers } from "@/lib/api/turn";
 import { relayCapStatus } from "@/lib/billing/relayCap";
@@ -45,7 +46,10 @@ export async function POST(
     .select("id, password_hash, api_key_id, status")
     .eq("id", roomId)
     .maybeSingle();
-  if (!room || room.api_key_id !== auth.ctx.apiKeyId) {
+  // Project-scoped: any valid key of the room's project may join (dev/prod/
+  // rotated builds). Exact-key matching broke cross-build joins with a bogus
+  // "Room not found" while the room plainly existed.
+  if (!room || !(await roomVisible(room.api_key_id, auth.ctx))) {
     return NextResponse.json({ error: "Room not found" }, { status: 404, headers: CORS });
   }
   if (room.status === "ended") {

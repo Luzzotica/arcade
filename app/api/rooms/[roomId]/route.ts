@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth, corsHeaders as CORS, corsPreflight } from "@/lib/api/auth";
+import { roomVisible } from "@/lib/api/roomScope";
 
 const admin = createAdminClient();
 
@@ -21,19 +22,26 @@ export async function GET(
   const { data: room, error } = await admin
     .from("rooms")
     .select(
-      "id, join_code, game_id, display_name, status, max_peers, is_password_protected, visibility, joinable, metadata, created_at, expires_at",
+      "id, join_code, game_id, display_name, status, max_peers, is_password_protected, visibility, joinable, metadata, created_at, expires_at, api_key_id",
     )
     .eq("id", roomId)
-    .eq("api_key_id", auth.ctx.apiKeyId)
     .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: CORS });
-  if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404, headers: CORS });
+  if (!room || !(await roomVisible(room.api_key_id, auth.ctx))) {
+    return NextResponse.json({ error: "Room not found" }, { status: 404, headers: CORS });
+  }
 
   const { data: peers } = await admin
     .from("room_peers")
     .select("id, kind, display_name, slot, is_host, status, metadata, joined_at")
     .eq("room_id", roomId)
     .order("slot");
+
+  const roster = peers ?? [];
+  // Capacity-facing count: non-host + non-disconnected (matches room_join).
+  const peerCount = roster.filter(
+    (p) => !p.is_host && p.status !== "disconnected",
+  ).length;
 
   return NextResponse.json(
     {
@@ -43,13 +51,14 @@ export async function GET(
       display_name: room.display_name,
       status: room.status,
       max_peers: room.max_peers,
+      peer_count: peerCount,
       is_password_protected: room.is_password_protected,
       visibility: room.visibility,
       joinable: room.joinable,
       metadata: room.metadata,
       created_at: room.created_at,
       expires_at: room.expires_at,
-      peers: (peers ?? []).map((p) => ({
+      peers: roster.map((p) => ({
         peer_id: p.id,
         kind: p.kind,
         display_name: p.display_name,
@@ -96,7 +105,7 @@ export async function PATCH(
     .select("id, host_secret, api_key_id")
     .eq("id", roomId)
     .maybeSingle();
-  if (!room || room.api_key_id !== auth.ctx.apiKeyId) {
+  if (!room || !(await roomVisible(room.api_key_id, auth.ctx))) {
     return NextResponse.json({ error: "Room not found" }, { status: 404, headers: CORS });
   }
   if (room.host_secret !== body.host_secret) {

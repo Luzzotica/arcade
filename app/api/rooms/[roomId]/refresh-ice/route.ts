@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth, corsHeaders as CORS, corsPreflight } from "@/lib/api/auth";
+import { roomVisible } from "@/lib/api/roomScope";
 import { rateLimit, tooManyRequests } from "@/lib/api/quota";
 import { generateTurnCredentials, mintCloudflareIceServers, stunOnlyIceServers } from "@/lib/api/turn";
 import { relayCapStatus } from "@/lib/billing/relayCap";
@@ -33,11 +34,12 @@ export async function POST(
   const { roomId } = await params;
   const { data: room } = await admin
     .from("rooms")
-    .select("id, host_secret")
+    .select("id, host_secret, api_key_id")
     .eq("id", roomId)
-    .eq("api_key_id", auth.ctx.apiKeyId)
     .maybeSingle();
-  if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404, headers: CORS });
+  if (!room || !(await roomVisible(room.api_key_id, auth.ctx))) {
+    return NextResponse.json({ error: "Room not found" }, { status: 404, headers: CORS });
+  }
 
   let body: { host_secret?: string; peer_secret?: string; peer_id?: string };
   try {
