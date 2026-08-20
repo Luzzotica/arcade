@@ -9,6 +9,7 @@ import { YouTubeLink } from "@/components/ui/YouTubeLink";
 import { usePresence } from "@/lib/supabase/hooks";
 import { isMobileDevice } from "@/lib/utils/mobile-detector";
 import { musicManager } from "@/lib/audio/MusicManager";
+import { otherGames, otherGameHost } from "@/lib/otherGames";
 
 interface Game {
   id: string;
@@ -239,6 +240,46 @@ export default function ArcadePage() {
               </Link>
             );
           })}
+        </div>
+
+        {/* Other Games — externally hosted; shareable list at /arcade/other */}
+        <div className="mt-20">
+          <div className="flex items-baseline justify-center gap-4 mb-8">
+            <h2 className="font-orbitron text-xl md:text-2xl font-bold tracking-[6px] text-white/70 uppercase">
+              Other Games
+            </h2>
+            <Link
+              href="/arcade/other"
+              className="font-orbitron text-xs tracking-[2px] text-white/40 hover:text-white/80 transition-colors no-underline uppercase"
+            >
+              Share this shelf →
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {otherGames.map((game) => (
+              <a
+                key={game.id}
+                href={game.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group bg-white/5 border-2 border-white/10 rounded-xl p-6 no-underline text-inherit transition-all hover:bg-white/10 hover:border-white/30 hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(0,0,0,0.4)] flex flex-col items-center text-center"
+              >
+                <span className="text-4xl mb-3" aria-hidden>
+                  {game.icon}
+                </span>
+                <h3 className="font-orbitron text-lg font-bold tracking-[2px] mb-1 text-white">
+                  {game.name}
+                </h3>
+                <p className="text-[11px] text-white/40 mb-4 break-all">{otherGameHost(game)}</p>
+                <div
+                  className="font-orbitron text-xs font-bold tracking-[2px] mt-auto transition-all group-hover:translate-x-1"
+                  style={{ color: game.color }}
+                >
+                  Play →
+                </div>
+              </a>
+            ))}
+          </div>
         </div>
       </div>
       {/* Online count - bottom right */}
